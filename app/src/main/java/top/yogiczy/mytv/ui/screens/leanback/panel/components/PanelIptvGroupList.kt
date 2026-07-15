@@ -40,6 +40,7 @@ fun LeanbackPanelIptvGroupList(
     showProgrammeProgressProvider: () -> Boolean = { false },
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
+    onPlayCatchup: (Iptv, top.yogiczy.mytv.data.entities.EpgProgramme) -> Unit = { _, _ -> },
     onToFavorite: () -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
@@ -61,7 +62,10 @@ fun LeanbackPanelIptvGroupList(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = childPadding.bottom),
     ) {
-        itemsIndexed(iptvGroupList) { index, iptvGroup ->
+        itemsIndexed(
+            items = iptvGroupList,
+            key = { _, iptvGroup -> iptvGroup.name },
+        ) { index, iptvGroup ->
             Row(
                 modifier = Modifier.padding(start = childPadding.start),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -89,6 +93,7 @@ fun LeanbackPanelIptvGroupList(
                 showProgrammeProgressProvider = showProgrammeProgressProvider,
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
+                onPlayCatchup = onPlayCatchup,
                 onUserAction = onUserAction,
             )
         }

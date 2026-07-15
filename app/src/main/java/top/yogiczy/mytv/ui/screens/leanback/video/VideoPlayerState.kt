@@ -6,6 +6,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -14,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackMedia3VideoPlayer
+import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackCompositeVideoPlayer
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 
 /**
@@ -34,6 +35,9 @@ class LeanbackVideoPlayerState(
     /** 元数据 */
     var metadata by mutableStateOf(LeanbackVideoPlayer.Metadata())
 
+    /** 当前播放位置（毫秒） */
+    var currentPositionMs by mutableLongStateOf(0L)
+
     fun prepare(url: String) {
         error = null
         instance.prepare(url)
@@ -49,6 +53,10 @@ class LeanbackVideoPlayerState(
 
     fun setVideoSurfaceView(surfaceView: SurfaceView) {
         instance.setVideoSurfaceView(surfaceView)
+    }
+
+    fun seekTo(positionMs: Long) {
+        instance.seekTo(positionMs)
     }
 
     private val onReadyListeners = mutableListOf<() -> Unit>()
@@ -90,6 +98,7 @@ class LeanbackVideoPlayerState(
         instance.onPrepared { }
         instance.onMetadata { metadata = it }
         instance.onCutoff { onCutoffListeners.forEach { it.invoke() } }
+        instance.onCurrentPosition { currentPositionMs = it }
     }
 
     fun release() {
@@ -108,7 +117,7 @@ fun rememberLeanbackVideoPlayerState(
     val coroutineScope = rememberCoroutineScope()
     val state = remember {
         LeanbackVideoPlayerState(
-            LeanbackMedia3VideoPlayer(context, coroutineScope),
+            LeanbackCompositeVideoPlayer(context, coroutineScope),
             defaultAspectRatioProvider = defaultAspectRatioProvider,
         )
     }

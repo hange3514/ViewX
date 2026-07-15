@@ -13,25 +13,39 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import top.yogiczy.mytv.data.entities.Epg
+import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeCurrent
+import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.rememberCurrentProgrammes
 import top.yogiczy.mytv.utils.isIPv6
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
 fun LeanbackPanelIptvInfo(
     modifier: Modifier = Modifier,
     iptvProvider: () -> Iptv = { Iptv() },
     iptvUrlIdxProvider: () -> Int = { 0 },
-    currentProgrammesProvider: () -> EpgProgrammeCurrent? = { null },
+    epgProvider: () -> Epg? = { null },
+    isReplayModeProvider: () -> Boolean = { false },
+    replayProgrammeProvider: () -> EpgProgramme? = { null },
 ) {
     val iptv = iptvProvider()
     val iptvUrlIdx = iptvUrlIdxProvider()
-    val currentProgrammes = currentProgrammesProvider()
+    val (currentProgramme, nextProgramme) = rememberCurrentProgrammes(
+        epgProvider()?.programmes ?: emptyList()
+    )
+    val isReplayMode = isReplayModeProvider()
+    val replayProgramme = replayProgrammeProvider()
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -81,14 +95,25 @@ fun LeanbackPanelIptvInfo(
             LocalTextStyle provides MaterialTheme.typography.bodyLarge,
             LocalContentColor provides LocalContentColor.current.copy(alpha = 0.8f),
         ) {
-            Text(
-                text = "正在播放：${currentProgrammes?.now?.title ?: "无节目"}",
-                maxLines = 1,
-            )
-            Text(
-                text = "稍后播放：${currentProgrammes?.next?.title ?: "无节目"}",
-                maxLines = 1,
-            )
+            if (isReplayMode && replayProgramme != null) {
+                Text(
+                    text = "回放中：${replayProgramme.title}",
+                    maxLines = 1,
+                )
+                Text(
+                    text = "${timeFormat.format(replayProgramme.startAt)} ~ ${timeFormat.format(replayProgramme.endAt)}",
+                    maxLines = 1,
+                )
+            } else {
+                Text(
+                    text = "正在播放：${currentProgramme?.title ?: "无节目"}",
+                    maxLines = 1,
+                )
+                Text(
+                    text = "稍后播放：${nextProgramme?.title ?: "无节目"}",
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -100,7 +125,14 @@ private fun LeanbackPanelIptvInfoPreview() {
         LeanbackPanelIptvInfo(
             iptvProvider = { Iptv.EXAMPLE },
             iptvUrlIdxProvider = { 1 },
-            currentProgrammesProvider = { EpgProgrammeCurrent.EXAMPLE },
+            epgProvider = {
+                Epg(
+                    channel = Iptv.EXAMPLE.channelName,
+                    programmes = EpgProgrammeList(
+                        EpgProgrammeCurrent.EXAMPLE.now?.let { listOf(it) } ?: emptyList()
+                    ),
+                )
+            },
         )
     }
 }

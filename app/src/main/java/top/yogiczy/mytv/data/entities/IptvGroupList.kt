@@ -9,6 +9,26 @@ import androidx.compose.runtime.Immutable
 data class IptvGroupList(
     val value: List<IptvGroup> = emptyList(),
 ) : List<IptvGroup> by value {
+    /**
+     * 已缓存的扁平频道列表，避免每次访问都执行 flatMap。
+     */
+    val iptvList: IptvList = IptvList(value.flatMap { it.iptvList })
+
+    /**
+     * 频道 -> 全局下标的缓存映射，避免 O(n) 查找。
+     */
+    private val iptvIndexMap: Map<Iptv, Int> =
+        iptvList.withIndex().associate { it.value to it.index }
+
+    /**
+     * 频道 -> 所属分组下标的缓存映射。
+     */
+    private val iptvGroupIndexMap: Map<Iptv, Int> = buildMap {
+        value.forEachIndexed { groupIdx, group ->
+            group.iptvList.forEach { put(it, groupIdx) }
+        }
+    }
+
     companion object {
         val EXAMPLE = IptvGroupList(List(5) { groupIdx ->
             IptvGroup(
@@ -25,13 +45,11 @@ data class IptvGroupList(
             )
         })
 
-        fun IptvGroupList.iptvGroupIdx(iptv: Iptv) =
-            this.indexOfFirst { group -> group.iptvList.any { it == iptv } }
+        fun IptvGroupList.iptvGroupIdx(iptv: Iptv) = iptvGroupIndexMap[iptv] ?: -1
 
-        fun IptvGroupList.iptvIdx(iptv: Iptv) =
-            this.flatMap { it.iptvList }.indexOfFirst { it == iptv }
+        fun IptvGroupList.iptvGroupOf(iptv: Iptv) =
+            iptvGroupIndexMap[iptv]?.let { value.getOrNull(it) }
 
-        val IptvGroupList.iptvList: List<Iptv>
-            get() = this.flatMap { it.iptvList }
+        fun IptvGroupList.iptvIdx(iptv: Iptv) = iptvIndexMap[iptv] ?: -1
     }
 }

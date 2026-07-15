@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,10 +29,11 @@ import androidx.tv.foundation.lazy.grid.itemsIndexed
 import androidx.tv.foundation.lazy.grid.rememberTvLazyGridState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
-import top.yogiczy.mytv.data.entities.Epg.Companion.currentProgrammes
 import top.yogiczy.mytv.data.entities.EpgList
+import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvList
+import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
@@ -49,14 +49,15 @@ fun LeanbackPanelIptvFavoriteList(
     showProgrammeProgressProvider: () -> Boolean = { false },
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onClose: () -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
     val favoriteListSize = 6
     val childPadding = rememberLeanbackChildPadding()
 
-    var key by remember { mutableIntStateOf(0) }
-    val iptvList = remember(key) { iptvListProvider() }
+    val iptvList = iptvListProvider()
+    val epgList = epgListProvider()
     val listState = rememberTvLazyGridState(max(0, iptvList.indexOf(currentIptvProvider())))
 
     var hasFocused by rememberSaveable { mutableStateOf(false) }
@@ -100,31 +101,35 @@ fun LeanbackPanelIptvFavoriteList(
                 bottom = childPadding.bottom,
             ),
         ) {
-            itemsIndexed(iptvList) { index, iptv ->
+            itemsIndexed(
+                items = iptvList,
+                key = { _, iptv -> iptv.urlList.firstOrNull() ?: iptv.name },
+            ) { index, iptv ->
+                val onSelected = remember(iptv) { { onIptvSelected(iptv) } }
+                val onFavoriteToggle = remember(iptv) { { onIptvFavoriteToggle(iptv) } }
+                val onShowEpg = remember(iptv) {
+                    {
+                        currentShowEpgIptv = iptv
+                        showEpgDialog = true
+                    }
+                }
+                val initialFocused = when {
+                    hasFocused -> false
+                    index == 0 && !iptvList.contains(currentIptvProvider()) -> true
+                    else -> iptv == currentIptvProvider()
+                }
+
                 LeanbackPanelIptvItem(
                     modifier = if (index < favoriteListSize) {
                         Modifier.handleLeanbackKeyEvents(onUp = { onClose() })
                     } else Modifier,
                     iptvProvider = { iptv },
-                    currentProgrammeProvider = {
-                        epgListProvider().firstOrNull { epg -> epg.channel == iptv.channelName }
-                            ?.currentProgrammes()?.now
-                    },
-                    showProgrammeProgressProvider = { showProgrammeProgressProvider() },
-                    onIptvSelected = { onIptvSelected(iptv) },
-                    onIptvFavoriteToggle = {
-                        key++
-                        onIptvFavoriteToggle(iptv)
-                    },
-                    onShowEpg = {
-                        currentShowEpgIptv = iptv
-                        showEpgDialog = true
-                    },
-                    initialFocusedProvider = {
-                        if (hasFocused) false
-                        else if (index == 0 && !iptvList.contains(currentIptvProvider())) true
-                        else iptv == currentIptvProvider()
-                    },
+                    epgProvider = { epgList.findByIptv(iptv) },
+                    showProgrammeProgressProvider = showProgrammeProgressProvider,
+                    onIptvSelected = onSelected,
+                    onIptvFavoriteToggle = onFavoriteToggle,
+                    onShowEpg = onShowEpg,
+                    initialFocusedProvider = { initialFocused },
                     onHasFocused = { hasFocused = true },
                 )
             }
@@ -135,10 +140,10 @@ fun LeanbackPanelIptvFavoriteList(
         showDialogProvider = { showEpgDialog },
         onDismissRequest = { showEpgDialog = false },
         iptvProvider = { currentShowEpgIptv },
-        epgProvider = {
-            epgListProvider().firstOrNull { epg ->
-                epg.channel == currentShowEpgIptv.channelName
-            } ?: Epg()
+        epgProvider = { epgList.findByIptv(currentShowEpgIptv) ?: Epg() },
+        onPlayCatchup = { iptv, programme ->
+            onPlayCatchup(iptv, programme)
+            showEpgDialog = false
         },
         modifier = Modifier
             .handleLeanbackKeyEvents(

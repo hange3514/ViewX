@@ -17,14 +17,16 @@ import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
-import top.yogiczy.mytv.data.entities.EpgProgramme.Companion.progress
-import top.yogiczy.mytv.data.entities.EpgProgrammeCurrent
+import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
+import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
 import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelChannelNo
 import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelIptvInfo
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 
 @Composable
 fun LeanbackPanelTempScreen(
@@ -32,7 +34,9 @@ fun LeanbackPanelTempScreen(
     channelNoProvider: () -> Int = { 0 },
     currentIptvProvider: () -> Iptv = { Iptv() },
     currentIptvUrlIdxProvider: () -> Int = { 0 },
-    currentProgrammesProvider: () -> EpgProgrammeCurrent? = { null },
+    epgProvider: () -> Epg? = { null },
+    isReplayModeProvider: () -> Boolean = { false },
+    replayProgrammeProvider: () -> EpgProgramme? = { null },
     showProgrammeProgressProvider: () -> Boolean = { false },
 ) {
     val childPadding = rememberLeanbackChildPadding()
@@ -54,18 +58,22 @@ fun LeanbackPanelTempScreen(
                         .sizeIn(maxWidth = 400.dp),
                     iptvProvider = currentIptvProvider,
                     iptvUrlIdxProvider = currentIptvUrlIdxProvider,
-                    currentProgrammesProvider = currentProgrammesProvider,
+                    epgProvider = epgProvider,
+                    isReplayModeProvider = isReplayModeProvider,
+                    replayProgrammeProvider = replayProgrammeProvider,
                 )
 
-                val currentProgrammes = currentProgrammesProvider()
-                if (showProgrammeProgressProvider() && currentProgrammes?.now != null) {
-                    Box(
+                val currentProgramme = rememberCurrentProgramme(
+                    epgProvider()?.programmes ?: emptyList()
+                )
+                val isReplayMode = isReplayModeProvider()
+                if (showProgrammeProgressProvider() && !isReplayMode && currentProgramme != null) {
+                    ProgrammeProgressIndicator(
+                        programme = currentProgramme,
                         modifier = Modifier
                             .layoutId("progress")
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(currentProgrammes.now.progress())
-                            .height(3.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)),
+                            .align(Alignment.BottomStart),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                     )
                 }
             },
@@ -102,14 +110,18 @@ private fun LeanbackPanelTempScreenPreview() {
         LeanbackPanelTempScreen(
             channelNoProvider = { 1 },
             currentIptvProvider = { Iptv.EXAMPLE },
-            currentProgrammesProvider = {
-                EpgProgrammeCurrent(
-                    now = EpgProgramme(
-                        startAt = System.currentTimeMillis() - 100000,
-                        endAt = System.currentTimeMillis() + 200000,
-                        title = "实况录像-2023/"
+            epgProvider = {
+                Epg(
+                    channel = Iptv.EXAMPLE.channelName,
+                    programmes = EpgProgrammeList(
+                        listOf(
+                            EpgProgramme(
+                                startAt = System.currentTimeMillis() - 100000,
+                                endAt = System.currentTimeMillis() + 200000,
+                                title = "实况录像-2023/"
+                            )
+                        )
                     ),
-                    next = null,
                 )
             },
             showProgrammeProgressProvider = { true },

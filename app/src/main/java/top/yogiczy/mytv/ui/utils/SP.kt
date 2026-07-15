@@ -84,6 +84,9 @@ object SP {
         /** 节目单历史列表 */
         EPG_XML_URL_HISTORY_LIST,
 
+        /** 启用节目单回放 */
+        EPG_REPLAY_ENABLE,
+
         /** ==================== 界面 ==================== */
         /** 显示节目进度 */
         UI_SHOW_EPG_PROGRAMME_PROGRESS,
@@ -224,6 +227,11 @@ object SP {
         get() = sp.getStringSet(KEY.EPG_XML_URL_HISTORY_LIST.name, emptySet()) ?: emptySet()
         set(value) = sp.edit().putStringSet(KEY.EPG_XML_URL_HISTORY_LIST.name, value).apply()
 
+    /** 启用节目单回放 */
+    var epgReplayEnable: Boolean
+        get() = sp.getBoolean(KEY.EPG_REPLAY_ENABLE.name, true)
+        set(value) = sp.edit().putBoolean(KEY.EPG_REPLAY_ENABLE.name, value).apply()
+
     /** ==================== 界面 ==================== */
     /** 显示节目进度 */
     var uiShowEpgProgrammeProgress: Boolean
@@ -232,7 +240,7 @@ object SP {
 
     /** 使用经典选台界面 */
     var uiUseClassicPanelScreen: Boolean
-        get() = sp.getBoolean(KEY.UI_USE_CLASSIC_PANEL_SCREEN.name, false)
+        get() = sp.getBoolean(KEY.UI_USE_CLASSIC_PANEL_SCREEN.name, true)
         set(value) = sp.edit().putBoolean(KEY.UI_USE_CLASSIC_PANEL_SCREEN.name, value).apply()
 
     /** 界面密度缩放比例 */

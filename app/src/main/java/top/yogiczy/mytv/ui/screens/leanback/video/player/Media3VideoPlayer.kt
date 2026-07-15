@@ -14,6 +14,7 @@ import androidx.media3.common.util.Util
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
 import androidx.media3.exoplayer.ExoPlayer
@@ -21,7 +22,6 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.exoplayer.util.EventLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -34,9 +34,21 @@ class LeanbackMedia3VideoPlayer(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
 ) : LeanbackVideoPlayer(coroutineScope) {
+    // EXTENSION_RENDERER_MODE_ON 让 FFmpeg 扩展解码器参与选择；
+    // 当前 lib-decoder-ffmpeg-release.aar 提供音频解码器，用于 MPEG-L2 等 Android 原生不支持的音轨。
     private val videoPlayer = ExoPlayer.Builder(
         context,
         DefaultRenderersFactory(context).setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+    ).setLoadControl(
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                1000, // 缓冲 1 秒就开始播放
+                2000, // rebuffer 后 2 秒继续播放
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
     ).build().apply {
         playWhenReady = true
     }
@@ -88,6 +100,7 @@ class LeanbackMedia3VideoPlayer(
         }
         updatePositionJob?.cancel()
         updatePositionJob = null
+        resetCutoff()
     }
 
     private val playerListener = object : Player.Listener {
@@ -109,8 +122,6 @@ class LeanbackMedia3VideoPlayer(
                         prepare(uri, C.CONTENT_TYPE_HLS)
                     } else if (contentTypeAttempts[C.CONTENT_TYPE_OTHER] != true) {
                         prepare(uri, C.CONTENT_TYPE_OTHER)
-                    } else if (contentTypeAttempts[C.CONTENT_TYPE_OTHER] != true) {
-                        prepare(uri, C.CONTENT_TYPE_OTHER)
                     } else {
                         triggerError(PlaybackException.UNSUPPORTED_TYPE)
                     }
@@ -129,12 +140,12 @@ class LeanbackMedia3VideoPlayer(
             } else if (playbackState == Player.STATE_READY) {
                 triggerReady()
 
-                updatePositionJob?.cancel()
-                updatePositionJob = coroutineScope.launch {
-                    triggerCurrentPosition(-1)
-                    while (true) {
-                        triggerCurrentPosition(videoPlayer.currentPosition)
-                        delay(1000)
+                if (updatePositionJob?.isActive != true) {
+                    updatePositionJob = coroutineScope.launch {
+                        while (true) {
+                            triggerCurrentPosition(videoPlayer.currentPosition)
+                            delay(1000)
+                        }
                     }
                 }
             }
@@ -197,19 +208,15 @@ class LeanbackMedia3VideoPlayer(
         }
     }
 
-    private val eventLogger = EventLogger()
-
     override fun initialize() {
         super.initialize()
         videoPlayer.addListener(playerListener)
         videoPlayer.addAnalyticsListener(metadataListener)
-        videoPlayer.addAnalyticsListener(eventLogger)
     }
 
     override fun release() {
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
-        videoPlayer.removeAnalyticsListener(eventLogger)
         videoPlayer.release()
         super.release()
     }
@@ -228,7 +235,19 @@ class LeanbackMedia3VideoPlayer(
         videoPlayer.pause()
     }
 
+    override fun seekTo(positionMs: Long) {
+        videoPlayer.seekTo(positionMs)
+    }
+
+    override val currentPositionMs: Long
+        get() = videoPlayer.currentPosition
+
     override fun setVideoSurfaceView(surfaceView: SurfaceView) {
         videoPlayer.setVideoSurfaceView(surfaceView)
+    }
+
+    override fun clearVideoSurface() {
+        // 释放 SurfaceView，防止 Surface 被复用时出现画面残留或黑屏
+        videoPlayer.setVideoSurfaceView(null)
     }
 }

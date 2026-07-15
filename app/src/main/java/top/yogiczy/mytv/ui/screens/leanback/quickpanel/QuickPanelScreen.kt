@@ -26,7 +26,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ButtonDefaults
+import top.yogiczy.mytv.data.entities.Epg
+import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeCurrent
+import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
@@ -46,7 +49,9 @@ fun LeanbackQuickPanelScreen(
     modifier: Modifier = Modifier,
     currentIptvProvider: () -> Iptv = { Iptv() },
     currentIptvUrlIdxProvider: () -> Int = { 0 },
-    currentProgrammesProvider: () -> EpgProgrammeCurrent? = { null },
+    epgProvider: () -> Epg? = { null },
+    isReplayModeProvider: () -> Boolean = { false },
+    replayProgrammeProvider: () -> EpgProgramme? = { null },
     currentIptvChannelNoProvider: () -> String = { "" },
     videoPlayerMetadataProvider: () -> LeanbackVideoPlayer.Metadata = { LeanbackVideoPlayer.Metadata() },
     videoPlayerAspectRatioProvider: () -> Float = { 16f / 9f },
@@ -96,7 +101,9 @@ fun LeanbackQuickPanelScreen(
                 LeanbackPanelIptvInfo(
                     iptvProvider = currentIptvProvider,
                     iptvUrlIdxProvider = currentIptvUrlIdxProvider,
-                    currentProgrammesProvider = currentProgrammesProvider,
+                    epgProvider = epgProvider,
+                    isReplayModeProvider = isReplayModeProvider,
+                    replayProgrammeProvider = replayProgrammeProvider,
                 )
 
                 LeanbackPanelPlayerInfo(
@@ -221,8 +228,16 @@ private fun LeanbackQuickPanelActionVideoAspectRatio(
 @Composable
 private fun LeanbackQuickPanelScreenPreview() {
     LeanbackTheme {
-        LeanbackQuickPanelScreen(currentIptvProvider = { Iptv.EXAMPLE },
-            currentProgrammesProvider = { EpgProgrammeCurrent.EXAMPLE },
+        LeanbackQuickPanelScreen(
+            currentIptvProvider = { Iptv.EXAMPLE },
+            epgProvider = {
+                Epg(
+                    channel = Iptv.EXAMPLE.channelName,
+                    programmes = EpgProgrammeList(
+                        listOfNotNull(EpgProgrammeCurrent.EXAMPLE.now)
+                    ),
+                )
+            },
             videoPlayerMetadataProvider = {
                 LeanbackVideoPlayer.Metadata(
                     videoWidth = 1920,

@@ -70,6 +70,19 @@ fun LeanbackSettingsCategoryEpg(
 
         item {
             LeanbackSettingsCategoryListItem(
+                headlineContent = "节目单回放",
+                supportingContent = "在节目单中选择已结束的节目进行回放",
+                trailingContent = {
+                    Switch(checked = settingsViewModel.epgReplayEnable, onCheckedChange = null)
+                },
+                onSelected = {
+                    settingsViewModel.epgReplayEnable = !settingsViewModel.epgReplayEnable
+                },
+            )
+        }
+
+        item {
+            LeanbackSettingsCategoryListItem(
                 headlineContent = "节目单刷新时间阈值",
                 supportingContent = "短按增加1小时，长按设为0小时；时间不到${settingsViewModel.epgRefreshTimeThreshold}:00节目单将不会刷新",
                 trailingContent = "${settingsViewModel.epgRefreshTimeThreshold}小时",
@@ -140,7 +153,10 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
     onSelected: (String) -> Unit = {},
     onDeleted: (String) -> Unit = {},
 ) {
-    val epgXmlUrlHistory = listOf(Constants.EPG_XML_URL) + epgXmlUrlHistoryProvider()
+    val epgXmlUrlHistoryProviderValue = epgXmlUrlHistoryProvider()
+    val epgXmlUrlHistory = remember(epgXmlUrlHistoryProviderValue) {
+        listOf(Constants.EPG_XML_URL) + epgXmlUrlHistoryProviderValue
+    }
     val currentEpgXmlUrl = currentEpgXmlUrlProvider()
 
     if (showDialogProvider()) {
@@ -160,7 +176,7 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(epgXmlUrlHistory) { url ->
+                    items(epgXmlUrlHistory, key = { it }) { url ->
                         val focusRequester = remember { FocusRequester() }
                         var isFocused by remember { mutableStateOf(false) }
 

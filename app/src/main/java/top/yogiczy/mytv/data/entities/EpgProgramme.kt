@@ -1,11 +1,14 @@
 package top.yogiczy.mytv.data.entities
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
+import kotlin.math.max
 
 /**
  * 频道节目
  */
 @Serializable
+@Immutable
 data class EpgProgramme(
     /**
      * 开始时间（时间戳）
@@ -26,12 +29,15 @@ data class EpgProgramme(
         /**
          * 是否正在直播
          */
-        fun EpgProgramme.isLive() = System.currentTimeMillis() in startAt..<endAt
+        fun EpgProgramme.isLive(time: Long) = time in startAt..<endAt
 
         /**
          * 节目进度
          */
-        fun EpgProgramme.progress() =
-            (System.currentTimeMillis() - startAt).toFloat() / (endAt - startAt)
+        fun EpgProgramme.progress(time: Long): Float {
+            val duration = max(1L, endAt - startAt)
+            val current = max(0L, time - startAt)
+            return (current.toFloat() / duration).coerceIn(0f, 1f)
+        }
     }
 }

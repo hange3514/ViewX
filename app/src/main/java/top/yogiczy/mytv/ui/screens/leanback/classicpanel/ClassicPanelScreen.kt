@@ -37,8 +37,8 @@ import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvGroup
 import top.yogiczy.mytv.data.entities.IptvGroupList
 import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvGroupIdx
-import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvList
 import top.yogiczy.mytv.data.entities.IptvList
+import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.screens.leanback.classicpanel.components.LeanbackClassicPanelEpgList
@@ -64,6 +64,7 @@ fun LeanbackClassicPanelScreen(
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onClose: () -> Unit = {},
     autoCloseState: PanelAutoCloseState = rememberPanelAutoCloseState(
         timeout = Constants.UI_SCREEN_AUTO_CLOSE_DELAY,
@@ -89,6 +90,7 @@ fun LeanbackClassicPanelScreen(
             iptvFavoriteListVisibleProvider = iptvFavoriteListVisibleProvider,
             onIptvFavoriteListVisibleChange = onIptvFavoriteListVisibleChange,
             onIptvFavoriteToggle = onIptvFavoriteToggle,
+            onPlayCatchup = onPlayCatchup,
             onUserAction = { autoCloseState.active() },
         )
     }
@@ -137,16 +139,31 @@ private fun LeanbackClassicPanelScreenContent(
     iptvFavoriteListVisibleProvider: () -> Boolean = { false },
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onUserAction: () -> Unit = {},
 ) {
     val iptvGroupList = iptvGroupListProvider()
+    val iptvFavoriteList = iptvFavoriteListProvider()
+    val iptvFavoriteEnable = iptvFavoriteEnableProvider()
+
+    val favoriteIptvList = remember(iptvGroupList, iptvFavoriteList) {
+        val favoriteSet = iptvFavoriteList.toHashSet()
+        iptvGroupList.iptvList.filter { favoriteSet.contains(it.channelName) }
+    }
+
+    val displayGroupList = remember(iptvGroupList, iptvFavoriteEnable) {
+        if (iptvFavoriteEnable)
+            IptvGroupList(listOf(LeanbackClassicPanelScreenFavoriteIptvGroup) + iptvGroupList)
+        else
+            iptvGroupList
+    }
 
     var focusedIptvGroup by remember {
         mutableStateOf(
             if (iptvFavoriteListVisibleProvider())
                 LeanbackClassicPanelScreenFavoriteIptvGroup
             else
-                iptvGroupList[max(0, iptvGroupList.iptvGroupIdx(currentIptvProvider()))]
+                displayGroupList[max(0, displayGroupList.iptvGroupIdx(currentIptvProvider()))]
         )
     }
 
@@ -155,28 +172,53 @@ private fun LeanbackClassicPanelScreenContent(
 
     var epgListVisible by remember { mutableStateOf(false) }
 
+    val displayGroupListProvider = remember(displayGroupList) { { displayGroupList } }
+    val initialIptvGroupProvider = remember {
+        {
+            if (iptvFavoriteListVisibleProvider())
+                LeanbackClassicPanelScreenFavoriteIptvGroup
+            else
+                iptvGroupList.find { it.iptvList.contains(currentIptvProvider()) }
+                    ?: IptvGroup()
+        }
+    }
+    val onIptvGroupFocused = remember {
+        { iptvGroup: IptvGroup ->
+            focusedIptvGroup = iptvGroup
+            onIptvFavoriteListVisibleChange(iptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup)
+        }
+    }
+    val exitFocusRequesterProvider = remember(focusedIptvFocusRequester) {
+        { focusedIptvFocusRequester }
+    }
+
     Row(modifier = modifier) {
         LeanbackClassicPanelIptvGroupList(
-            iptvGroupListProvider = {
-                if (iptvFavoriteEnableProvider())
-                    IptvGroupList(listOf(LeanbackClassicPanelScreenFavoriteIptvGroup) + iptvGroupList)
-                else
-                    iptvGroupList
-            },
-            initialIptvGroupProvider = {
-                if (iptvFavoriteListVisibleProvider())
-                    LeanbackClassicPanelScreenFavoriteIptvGroup
-                else
-                    iptvGroupList.find { it.iptvList.contains(currentIptvProvider()) }
-                        ?: IptvGroup()
-            },
-            onIptvGroupFocused = {
-                focusedIptvGroup = it
-                onIptvFavoriteListVisibleChange(it == LeanbackClassicPanelScreenFavoriteIptvGroup)
-            },
-            exitFocusRequesterProvider = { focusedIptvFocusRequester },
+            iptvGroupListProvider = displayGroupListProvider,
+            initialIptvGroupProvider = initialIptvGroupProvider,
+            onIptvGroupFocused = onIptvGroupFocused,
+            exitFocusRequesterProvider = exitFocusRequesterProvider,
             onUserAction = onUserAction,
         )
+
+        val iptvGroupProvider = remember(focusedIptvGroup) { { focusedIptvGroup } }
+        val iptvListProvider = remember(focusedIptvGroup, favoriteIptvList) {
+            {
+                if (focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup)
+                    IptvList(favoriteIptvList)
+                else
+                    focusedIptvGroup.iptvList
+            }
+        }
+        val onIptvFocused = remember {
+            { iptv: Iptv, focusRequester: FocusRequester ->
+                focusedIptv = iptv
+                focusedIptvFocusRequester = focusRequester
+            }
+        }
+        val isFavoriteListProvider = remember(focusedIptvGroup) {
+            { focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup }
+        }
 
         LeanbackClassicPanelIptvList(
             modifier = Modifier
@@ -194,35 +236,37 @@ private fun LeanbackClassicPanelScreenContent(
                         }
                     }
                 },
-            iptvGroupProvider = { focusedIptvGroup },
-            iptvListProvider = {
-                if (focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup)
-                    IptvList(iptvGroupListProvider().iptvList
-                        .filter { iptvFavoriteListProvider().contains(it.channelName) })
-                else
-                    focusedIptvGroup.iptvList
-            },
+            iptvGroupProvider = iptvGroupProvider,
+            iptvListProvider = iptvListProvider,
             epgListProvider = epgListProvider,
             initialIptvProvider = currentIptvProvider,
             onIptvSelected = onIptvSelected,
             onIptvFavoriteToggle = onIptvFavoriteToggle,
-            onIptvFocused = { iptv, focusRequester ->
-                focusedIptv = iptv
-                focusedIptvFocusRequester = focusRequester
-            },
+            onIptvFocused = onIptvFocused,
             showProgrammeProgressProvider = showProgrammeProgressProvider,
             onUserAction = onUserAction,
-            isFavoriteListProvider = { focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup },
+            isFavoriteListProvider = isFavoriteListProvider,
         )
 
-        LeanbackVisible({ epgListVisible }) {
+        val epgListVisibleProvider = remember { { epgListVisible } }
+        val epgListInvisibleProvider = remember { { !epgListVisible } }
+        val focusedIptvProvider = remember(focusedIptv) { { focusedIptv } }
+        val focusedIptvEpgProvider = remember {
+            { epgListProvider().findByIptv(focusedIptv) }
+        }
+        val focusedIptvFocusRequesterProvider =
+            remember(focusedIptvFocusRequester) { { focusedIptvFocusRequester } }
+
+        LeanbackVisible(epgListVisibleProvider) {
             LeanbackClassicPanelEpgList(
-                epgProvider = { epgListProvider().firstOrNull { it.channel == focusedIptv.channelName } },
-                exitFocusRequesterProvider = { focusedIptvFocusRequester },
+                iptvProvider = focusedIptvProvider,
+                epgProvider = focusedIptvEpgProvider,
+                exitFocusRequesterProvider = focusedIptvFocusRequesterProvider,
+                onPlayCatchup = onPlayCatchup,
                 onUserAction = onUserAction,
             )
         }
-        LeanbackVisible({ !epgListVisible }) {
+        LeanbackVisible(epgListInvisibleProvider) {
             LeanbackClassicPanelVerticalTip(
                 modifier = Modifier
                     .background(MaterialTheme.colorScheme.background.copy(0.7f))

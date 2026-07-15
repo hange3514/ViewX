@@ -32,7 +32,7 @@ object Constants {
     /**
      * 节目单刷新时间阈值（小时）
      */
-    const val EPG_REFRESH_TIME_THRESHOLD = 2 // 不到2点不刷新
+    const val EPG_REFRESH_TIME_THRESHOLD = 0 // 测试期间允许任意时间刷新
 
     /**
      * Git最新版本信息

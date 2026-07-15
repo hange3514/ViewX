@@ -100,7 +100,6 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.rtsp)
-
     // 序列化
     implementation(libs.kotlinx.serialization)
 
@@ -111,7 +110,7 @@ dependencies {
     // 二维码
     implementation(libs.qrose)
 
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    implementation(files("libs/lib-decoder-ffmpeg-release.aar"))
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

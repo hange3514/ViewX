@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -33,13 +34,7 @@ fun LeanbackPanelPlayerInfo(
         LocalContentColor provides MaterialTheme.colorScheme.onBackground
     ) {
         Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            PanelPlayerInfoResolution(
-                resolutionProvider = {
-                    val metadata = metadataProvider()
-                    metadata.videoWidth to metadata.videoHeight
-                }
-            )
-
+            PanelPlayerInfoResolution(metadataProvider = metadataProvider)
             PanelPlayerInfoNetSpeed()
         }
     }
@@ -48,9 +43,14 @@ fun LeanbackPanelPlayerInfo(
 @Composable
 private fun PanelPlayerInfoResolution(
     modifier: Modifier = Modifier,
-    resolutionProvider: () -> Pair<Int, Int> = { 0 to 0 },
+    metadataProvider: () -> LeanbackVideoPlayer.Metadata = { LeanbackVideoPlayer.Metadata() },
 ) {
-    val resolution = resolutionProvider()
+    val resolution by remember(metadataProvider) {
+        derivedStateOf {
+            val metadata = metadataProvider()
+            metadata.videoWidth to metadata.videoHeight
+        }
+    }
 
     Text(
         text = "分辨率：${resolution.first}×${resolution.second}",
@@ -65,7 +65,7 @@ private fun PanelPlayerInfoNetSpeed(
 ) {
     Text(
         text = if (netSpeed < 1024 * 999) "网速：${netSpeed / 1024}KB/s"
-        else "网速：${DecimalFormat("#.#").format(netSpeed / 1024 / 1024f)}MB/s",
+        else "网速：${DecimalFormat("#.").format(netSpeed / 1024 / 1024f)}MB/s",
         modifier = modifier,
     )
 }

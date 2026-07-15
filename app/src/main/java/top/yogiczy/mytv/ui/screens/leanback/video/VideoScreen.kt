@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -21,6 +23,7 @@ fun LeanbackVideoScreen(
 ) {
     val context = LocalContext.current
     val childPadding = rememberLeanbackChildPadding()
+    val boundSurfaceView = remember { mutableStateOf<SurfaceView?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
@@ -29,10 +32,16 @@ fun LeanbackVideoScreen(
                 .aspectRatio(state.aspectRatio),
             factory = {
                 // PlayerView 切换视频时黑屏闪烁，使用 SurfaceView 代替
-                SurfaceView(context)
+                SurfaceView(context).also {
+                    state.setVideoSurfaceView(it)
+                    boundSurfaceView.value = it
+                }
             },
             update = { surfaceView ->
-                state.setVideoSurfaceView(surfaceView)
+                if (boundSurfaceView.value != surfaceView) {
+                    state.setVideoSurfaceView(surfaceView)
+                    boundSurfaceView.value = surfaceView
+                }
             },
         )
 

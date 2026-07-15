@@ -26,13 +26,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgList
-import top.yogiczy.mytv.data.entities.EpgList.Companion.currentProgrammes
+
+import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvGroupList
 import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvIdx
-import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvList
 import top.yogiczy.mytv.data.entities.IptvList
+import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelChannelNo
@@ -52,6 +54,8 @@ fun LeanbackPanelScreen(
     epgListProvider: () -> EpgList = { EpgList() },
     currentIptvProvider: () -> Iptv = { Iptv() },
     currentIptvUrlIdxProvider: () -> Int = { 0 },
+    isReplayModeProvider: () -> Boolean = { false },
+    replayProgrammeProvider: () -> top.yogiczy.mytv.data.entities.EpgProgramme? = { null },
     videoPlayerMetadataProvider: () -> LeanbackVideoPlayer.Metadata = { LeanbackVideoPlayer.Metadata() },
     showProgrammeProgressProvider: () -> Boolean = { false },
     iptvFavoriteEnableProvider: () -> Boolean = { true },
@@ -60,6 +64,7 @@ fun LeanbackPanelScreen(
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onClose: () -> Unit = {},
     autoCloseState: PanelAutoCloseState = rememberPanelAutoCloseState(
         timeout = Constants.UI_SCREEN_AUTO_CLOSE_DELAY,
@@ -76,18 +81,21 @@ fun LeanbackPanelScreen(
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
             .pointerInput(Unit) { detectTapGestures(onTap = { onClose() }) },
     ) {
-        LeanbackPanelScreenTopRight(
-            channelNoProvider = {
+        val channelNoProvider = remember {
+            {
                 (iptvGroupListProvider().iptvIdx(currentIptvProvider()) + 1).toString()
                     .padStart(2, '0')
             }
-        )
+        }
+        LeanbackPanelScreenTopRight(channelNoProvider = channelNoProvider)
 
         LeanbackPanelScreenBottom(
             iptvGroupListProvider = iptvGroupListProvider,
             epgListProvider = epgListProvider,
             currentIptvProvider = currentIptvProvider,
             currentIptvUrlIdxProvider = currentIptvUrlIdxProvider,
+            isReplayModeProvider = isReplayModeProvider,
+            replayProgrammeProvider = replayProgrammeProvider,
             videoPlayerMetadataProvider = videoPlayerMetadataProvider,
             showProgrammeProgressProvider = showProgrammeProgressProvider,
             iptvFavoriteEnableProvider = iptvFavoriteEnableProvider,
@@ -96,7 +104,8 @@ fun LeanbackPanelScreen(
             onIptvFavoriteListVisibleChange = onIptvFavoriteListVisibleChange,
             onIptvSelected = onIptvSelected,
             onIptvFavoriteToggle = onIptvFavoriteToggle,
-            onUserAction = { autoCloseState.active() },
+            onPlayCatchup = onPlayCatchup,
+            onClose = onClose,
         )
     }
 }
@@ -140,6 +149,8 @@ private fun LeanbackPanelScreenBottom(
     epgListProvider: () -> EpgList = { EpgList() },
     currentIptvProvider: () -> Iptv = { Iptv() },
     currentIptvUrlIdxProvider: () -> Int = { 0 },
+    isReplayModeProvider: () -> Boolean = { false },
+    replayProgrammeProvider: () -> top.yogiczy.mytv.data.entities.EpgProgramme? = { null },
     videoPlayerMetadataProvider: () -> LeanbackVideoPlayer.Metadata = { LeanbackVideoPlayer.Metadata() },
     showProgrammeProgressProvider: () -> Boolean = { false },
     iptvFavoriteEnableProvider: () -> Boolean = { true },
@@ -148,9 +159,11 @@ private fun LeanbackPanelScreenBottom(
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
-    onUserAction: () -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onClose: () -> Unit = {},
 ) {
     val childPadding = rememberLeanbackChildPadding()
+    val epgList = epgListProvider()
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -162,9 +175,11 @@ private fun LeanbackPanelScreenBottom(
                     .padding(start = childPadding.start),
                 iptvProvider = currentIptvProvider,
                 iptvUrlIdxProvider = currentIptvUrlIdxProvider,
-                currentProgrammesProvider = {
-                    epgListProvider().currentProgrammes(currentIptvProvider())
-                }
+                epgProvider = remember(epgList) {
+                    { epgList.findByIptv(currentIptvProvider()) }
+                },
+                isReplayModeProvider = isReplayModeProvider,
+                replayProgrammeProvider = replayProgrammeProvider,
             )
 
             LeanbackPanelPlayerInfo(
@@ -183,7 +198,7 @@ private fun LeanbackPanelScreenBottom(
                 onIptvFavoriteListVisibleChange = onIptvFavoriteListVisibleChange,
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
-                onUserAction = onUserAction,
+                onPlayCatchup = onPlayCatchup,
             )
         }
     }
@@ -202,28 +217,49 @@ fun LeanbackPanelScreenBottomIptvList(
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
-    onUserAction: () -> Unit = {},
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
 ) {
     val iptvFavoriteEnable = iptvFavoriteEnableProvider()
     var favoriteListVisible by remember { mutableStateOf(iptvFavoriteListVisibleProvider()) }
 
+    val iptvGroupList = iptvGroupListProvider()
+    val iptvFavoriteList = iptvFavoriteListProvider()
+    val favoriteList = remember(iptvGroupList, iptvFavoriteList) {
+        val favoriteSet = iptvFavoriteList.toHashSet()
+        iptvGroupList.iptvList.filter { favoriteSet.contains(it.channelName) }
+    }
+
+    val favoriteIptvListProvider = remember(favoriteList) { { IptvList(favoriteList) } }
+    val onFavoriteListClose = remember {
+        {
+            favoriteListVisible = false
+            onIptvFavoriteListVisibleChange(false)
+        }
+    }
+    val onToFavorite = remember(iptvFavoriteEnable, favoriteList, onIptvFavoriteListVisibleChange) {
+        {
+            if (iptvFavoriteEnable) {
+                if (favoriteList.isNotEmpty()) {
+                    favoriteListVisible = true
+                    onIptvFavoriteListVisibleChange(true)
+                } else {
+                    LeanbackToastState.I.showToast("没有收藏的频道")
+                }
+            }
+        }
+    }
+
     Box(modifier = modifier.height(150.dp)) {
         if (favoriteListVisible)
             LeanbackPanelIptvFavoriteList(
-                iptvListProvider = {
-                    IptvList(iptvGroupListProvider().iptvList
-                        .filter { iptvFavoriteListProvider().contains(it.channelName) })
-                },
+                iptvListProvider = favoriteIptvListProvider,
                 epgListProvider = epgListProvider,
                 currentIptvProvider = currentIptvProvider,
                 showProgrammeProgressProvider = showProgrammeProgressProvider,
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
-                onClose = {
-                    favoriteListVisible = false
-                    onIptvFavoriteListVisibleChange(false)
-                },
-                onUserAction = onUserAction,
+                onPlayCatchup = onPlayCatchup,
+                onClose = onFavoriteListClose,
             )
         else
             LeanbackPanelIptvGroupList(
@@ -233,20 +269,8 @@ fun LeanbackPanelScreenBottomIptvList(
                 showProgrammeProgressProvider = showProgrammeProgressProvider,
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
-                onToFavorite = {
-                    if (!iptvFavoriteEnable) return@LeanbackPanelIptvGroupList
-
-                    val favoriteList = iptvGroupListProvider().iptvList
-                        .filter { iptvFavoriteListProvider().contains(it.channelName) }
-
-                    if (favoriteList.isNotEmpty()) {
-                        favoriteListVisible = true
-                        onIptvFavoriteListVisibleChange(true)
-                    } else {
-                        LeanbackToastState.I.showToast("没有收藏的频道")
-                    }
-                },
-                onUserAction = onUserAction,
+                onPlayCatchup = onPlayCatchup,
+                onToFavorite = onToFavorite,
             )
     }
 }

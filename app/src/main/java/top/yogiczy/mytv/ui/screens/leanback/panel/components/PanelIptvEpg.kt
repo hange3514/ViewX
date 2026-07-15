@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +32,15 @@ import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
-import top.yogiczy.mytv.data.entities.EpgProgramme.Companion.isLive
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
+import top.yogiczy.mytv.data.entities.indexOfCurrent
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
+import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
+import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.max
@@ -47,6 +52,7 @@ fun LeanbackPanelIptvEpgDialog(
     onDismissRequest: () -> Unit = {},
     iptvProvider: () -> Iptv = { Iptv() },
     epgProvider: () -> Epg = { Epg() },
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onUserAction: () -> Unit = {}
 ) {
     if (showDialogProvider()) {
@@ -59,11 +65,14 @@ fun LeanbackPanelIptvEpgDialog(
             confirmButton = { Text(text = "左右切换频道") },
             title = { Text(iptv.channelName) },
             text = {
-                val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+                val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
                 var hasFocused by remember(iptv) { mutableStateOf(false) }
 
-                val listState = TvLazyListState(
-                    max(0, epg.programmes.indexOfFirst { it.isLive() } - 2))
+                val listState = remember(epg.programmes) {
+                    TvLazyListState(
+                        max(0, epg.programmes.indexOfCurrent(System.currentTimeMillis()) - 2)
+                    )
+                }
 
                 LaunchedEffect(listState) {
                     snapshotFlow { listState.isScrollInProgress }
@@ -76,12 +85,17 @@ fun LeanbackPanelIptvEpgDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
                     if (epg.programmes.isNotEmpty()) {
-                        items(epg.programmes, key = { it.hashCode() }) { programme ->
+                        items(epg.programmes, key = { it.startAt }) { programme ->
                             var isFocused by remember { mutableStateOf(false) }
                             val focusRequester = remember { FocusRequester() }
+                            val isLive = rememberProgrammeIsLive(programme)
+                            val isReplayable = rememberProgrammeIsReplayable(
+                                programme,
+                                iptv.catchupSource.isNotBlank(),
+                            )
 
                             LaunchedEffect(Unit) {
-                                if (programme.isLive() && !hasFocused) {
+                                if (isLive && !hasFocused) {
                                     hasFocused = true
                                     focusRequester.requestFocus()
                                 }
@@ -96,15 +110,45 @@ fun LeanbackPanelIptvEpgDialog(
                                         .focusRequester(focusRequester)
                                         .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
                                         .handleLeanbackKeyEvents(
-                                            onSelect = { focusRequester.requestFocus() },
+                                            onSelect = {
+                                                if (isReplayable) {
+                                                    onPlayCatchup(iptv, programme)
+                                                    onDismissRequest()
+                                                } else {
+                                                    when {
+                                                        iptv.catchupSource.isBlank() ->
+                                                            LeanbackToastState.I.showToast("该频道不支持回放")
+
+                                                        programme.startAt > CurrentTime.ms.value ->
+                                                            LeanbackToastState.I.showToast("节目尚未开始")
+
+                                                        else -> focusRequester.requestFocus()
+                                                    }
+                                                }
+                                            },
                                         ),
                                     colors = ListItemDefaults.colors(
                                         containerColor = Color.Transparent,
                                         focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                                         selectedContainerColor = Color.Transparent,
                                     ),
-                                    selected = programme.isLive(),
-                                    onClick = { },
+                                    selected = isLive,
+                                    onClick = {
+                                        if (isReplayable) {
+                                            onPlayCatchup(iptv, programme)
+                                            onDismissRequest()
+                                        } else {
+                                            when {
+                                                iptv.catchupSource.isBlank() ->
+                                                    LeanbackToastState.I.showToast("该频道不支持回放")
+
+                                                programme.startAt > CurrentTime.ms.value ->
+                                                    LeanbackToastState.I.showToast("节目尚未开始")
+
+                                                else -> focusRequester.requestFocus()
+                                            }
+                                        }
+                                    },
                                     headlineContent = {
                                         Text(
                                             text = programme.title,
@@ -121,10 +165,15 @@ fun LeanbackPanelIptvEpgDialog(
                                         )
                                     },
                                     trailingContent = {
-                                        if (programme.isLive()) {
-                                            Icon(
+                                        when {
+                                            isLive -> Icon(
                                                 Icons.Default.PlayArrow,
                                                 contentDescription = "playing",
+                                            )
+
+                                            isReplayable -> Text(
+                                                text = "回放",
+                                                style = MaterialTheme.typography.labelSmall,
                                             )
                                         }
                                     },

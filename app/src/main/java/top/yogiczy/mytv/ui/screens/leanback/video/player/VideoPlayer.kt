@@ -15,6 +15,7 @@ abstract class LeanbackVideoPlayer(
     private var loadTimeoutJob: Job? = null
     private var cutoffTimeoutJob: Job? = null
     private var currentPosition = -1L
+    private var positionCheckpoint = -1L
 
     protected var metadata = Metadata()
 
@@ -34,6 +35,12 @@ abstract class LeanbackVideoPlayer(
 
     abstract fun setVideoSurfaceView(surfaceView: SurfaceView)
 
+    open fun clearVideoSurface() {}
+
+    abstract fun seekTo(positionMs: Long)
+
+    abstract val currentPositionMs: Long
+
     private val onResolutionListeners = mutableListOf<(width: Int, height: Int) -> Unit>()
     private val onErrorListeners = mutableListOf<(error: PlaybackException?) -> Unit>()
     private val onReadyListeners = mutableListOf<() -> Unit>()
@@ -41,6 +48,7 @@ abstract class LeanbackVideoPlayer(
     private val onPreparedListeners = mutableListOf<() -> Unit>()
     private val onMetadataListeners = mutableListOf<(metadata: Metadata) -> Unit>()
     private val onCutoffListeners = mutableListOf<() -> Unit>()
+    private val onCurrentPositionListeners = mutableListOf<(positionMs: Long) -> Unit>()
 
     private fun clearAllListeners() {
         onResolutionListeners.clear()
@@ -50,6 +58,7 @@ abstract class LeanbackVideoPlayer(
         onPreparedListeners.clear()
         onMetadataListeners.clear()
         onCutoffListeners.clear()
+        onCurrentPositionListeners.clear()
     }
 
     protected fun triggerResolution(width: Int, height: Int) {
@@ -89,14 +98,34 @@ abstract class LeanbackVideoPlayer(
     }
 
     protected fun triggerCurrentPosition(newPosition: Long) {
-        if (currentPosition != newPosition) {
-            cutoffTimeoutJob?.cancel()
-            cutoffTimeoutJob = coroutineScope.launch {
-                delay(SP.videoPlayerLoadTimeout)
-                onCutoffListeners.forEach { it() }
-            }
+        // 只有进度真正前进（或回退）时才重置卡死检测；
+        // 进度仅小幅抖动（如软解掉帧）时不重置，防止卡死后一直无法触发恢复。
+        if (positionCheckpoint < 0 || newPosition < positionCheckpoint || newPosition - positionCheckpoint >= 500) {
+            positionCheckpoint = newPosition
+            resetCutoffTimeoutJob()
         }
         currentPosition = newPosition
+        onCurrentPositionListeners.forEach { it(newPosition) }
+    }
+
+    protected fun resetCutoff() {
+        positionCheckpoint = -1
+        cutoffTimeoutJob?.cancel()
+        cutoffTimeoutJob = null
+    }
+
+    private fun resetCutoffTimeoutJob() {
+        cutoffTimeoutJob?.cancel()
+        cutoffTimeoutJob = coroutineScope.launch {
+            delay(SP.videoPlayerLoadTimeout)
+            onCutoffListeners.forEach { it() }
+        }
+    }
+
+    protected fun triggerCutoff() {
+        onCutoffListeners.forEach { it() }
+        cutoffTimeoutJob?.cancel()
+        cutoffTimeoutJob = null
     }
 
     fun onResolution(listener: (width: Int, height: Int) -> Unit) {
@@ -125,6 +154,10 @@ abstract class LeanbackVideoPlayer(
 
     fun onCutoff(listener: () -> Unit) {
         onCutoffListeners.add(listener)
+    }
+
+    fun onCurrentPosition(listener: (positionMs: Long) -> Unit) {
+        onCurrentPositionListeners.add(listener)
     }
 
     data class PlaybackException(

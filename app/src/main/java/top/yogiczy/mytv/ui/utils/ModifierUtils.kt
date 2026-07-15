@@ -1,12 +1,13 @@
 package top.yogiczy.mytv.ui.utils
 
-import android.os.Build
 import android.view.KeyEvent
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -16,23 +17,27 @@ import kotlin.math.absoluteValue
 fun Modifier.handleLeanbackKeyEvents(
     onKeyTap: Map<Int, () -> Unit> = emptyMap(),
     onKeyLongTap: Map<Int, () -> Unit> = emptyMap(),
-): Modifier {
-    val keyDownMap = mutableMapOf<Int, Boolean>()
+    onKeyPressStart: Map<Int, () -> Unit> = emptyMap(),
+    onKeyPressEnd: Map<Int, () -> Unit> = emptyMap(),
+): Modifier = composed {
+    val keyDownMap = remember { mutableMapOf<Int, Boolean>() }
 
-    return onPreviewKeyEvent {
+    onPreviewKeyEvent {
         when (it.nativeKeyEvent.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (it.nativeKeyEvent.repeatCount == 0) {
                     keyDownMap[it.nativeKeyEvent.keyCode] = true
+                    onKeyPressStart[it.nativeKeyEvent.keyCode]?.invoke()
                 } else if (it.nativeKeyEvent.repeatCount == 1) {
-                    keyDownMap.remove(it.nativeKeyEvent.keyCode)
+                    keyDownMap[it.nativeKeyEvent.keyCode] = false
                     onKeyLongTap[it.nativeKeyEvent.keyCode]?.invoke()
                 }
             }
 
             KeyEvent.ACTION_UP -> {
-                if (keyDownMap[it.nativeKeyEvent.keyCode] == true) {
-                    keyDownMap.remove(it.nativeKeyEvent.keyCode)
+                val wasShortPress = keyDownMap.remove(it.nativeKeyEvent.keyCode) == true
+                onKeyPressEnd[it.nativeKeyEvent.keyCode]?.invoke()
+                if (wasShortPress) {
                     onKeyTap[it.nativeKeyEvent.keyCode]?.invoke()
                 }
             }
@@ -94,8 +99,12 @@ fun Modifier.handleLeanbackKeyEvents(
     key: Any = Unit,
     onLeft: () -> Unit = {},
     onLongLeft: () -> Unit = {},
+    onLeftDown: () -> Unit = {},
+    onLeftUp: () -> Unit = {},
     onRight: () -> Unit = {},
     onLongRight: () -> Unit = {},
+    onRightDown: () -> Unit = {},
+    onRightUp: () -> Unit = {},
     onUp: () -> Unit = {},
     onLongUp: () -> Unit = {},
     onDown: () -> Unit = {},
@@ -104,57 +113,79 @@ fun Modifier.handleLeanbackKeyEvents(
     onLongSelect: () -> Unit = {},
     onSettings: () -> Unit = {},
     onNumber: (Int) -> Unit = {},
-) = this then handleLeanbackKeyEvents(
-    onKeyTap = mapOf(
-        KeyEvent.KEYCODE_DPAD_LEFT to onLeft,
-        KeyEvent.KEYCODE_DPAD_RIGHT to onRight,
-        KeyEvent.KEYCODE_DPAD_UP to onUp,
-        KeyEvent.KEYCODE_CHANNEL_UP to onUp,
-        KeyEvent.KEYCODE_DPAD_DOWN to onDown,
-        KeyEvent.KEYCODE_CHANNEL_DOWN to onDown,
+): Modifier = composed {
+    val keyDownMap = remember { mutableMapOf<Int, Boolean>() }
 
-        KeyEvent.KEYCODE_DPAD_CENTER to onSelect,
-        KeyEvent.KEYCODE_ENTER to onSelect,
-        KeyEvent.KEYCODE_NUMPAD_ENTER to onSelect,
-
-        KeyEvent.KEYCODE_MENU to onSettings,
-        KeyEvent.KEYCODE_SETTINGS to onSettings,
-        KeyEvent.KEYCODE_HELP to onSettings,
-        KeyEvent.KEYCODE_H to onSettings,
-
-        KeyEvent.KEYCODE_L to onLongSelect,
-
-        KeyEvent.KEYCODE_0 to { onNumber(0) },
-        KeyEvent.KEYCODE_1 to { onNumber(1) },
-        KeyEvent.KEYCODE_2 to { onNumber(2) },
-        KeyEvent.KEYCODE_3 to { onNumber(3) },
-        KeyEvent.KEYCODE_4 to { onNumber(4) },
-        KeyEvent.KEYCODE_5 to { onNumber(5) },
-        KeyEvent.KEYCODE_6 to { onNumber(6) },
-        KeyEvent.KEYCODE_7 to { onNumber(7) },
-        KeyEvent.KEYCODE_8 to { onNumber(8) },
-        KeyEvent.KEYCODE_9 to { onNumber(9) },
-    ).apply {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT to onLeft
-            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT to onRight
-            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP to onUp
-            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN to onDown
+    fun handleTap(keyCode: Int) {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT -> onLeft()
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT -> onRight()
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP -> onUp()
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> onDown()
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> onSelect()
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS, KeyEvent.KEYCODE_HELP, KeyEvent.KEYCODE_H -> onSettings()
+            KeyEvent.KEYCODE_L -> onLongSelect()
+            KeyEvent.KEYCODE_0 -> onNumber(0)
+            KeyEvent.KEYCODE_1 -> onNumber(1)
+            KeyEvent.KEYCODE_2 -> onNumber(2)
+            KeyEvent.KEYCODE_3 -> onNumber(3)
+            KeyEvent.KEYCODE_4 -> onNumber(4)
+            KeyEvent.KEYCODE_5 -> onNumber(5)
+            KeyEvent.KEYCODE_6 -> onNumber(6)
+            KeyEvent.KEYCODE_7 -> onNumber(7)
+            KeyEvent.KEYCODE_8 -> onNumber(8)
+            KeyEvent.KEYCODE_9 -> onNumber(9)
         }
-    },
-    onKeyLongTap = mapOf(
-        KeyEvent.KEYCODE_DPAD_LEFT to onLongLeft,
-        KeyEvent.KEYCODE_DPAD_RIGHT to onLongRight,
-        KeyEvent.KEYCODE_DPAD_UP to onLongUp,
-        KeyEvent.KEYCODE_CHANNEL_UP to onLongUp,
-        KeyEvent.KEYCODE_DPAD_DOWN to onLongDown,
-        KeyEvent.KEYCODE_CHANNEL_DOWN to onLongDown,
+    }
 
-        KeyEvent.KEYCODE_ENTER to onLongSelect,
-        KeyEvent.KEYCODE_NUMPAD_ENTER to onLongSelect,
-        KeyEvent.KEYCODE_DPAD_CENTER to onLongSelect,
-    ),
-).pointerInput(key) {
+    fun handleLongTap(keyCode: Int) {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> onLongLeft()
+            KeyEvent.KEYCODE_DPAD_RIGHT -> onLongRight()
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> onLongUp()
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> onLongDown()
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> onLongSelect()
+        }
+    }
+
+    fun handlePressStart(keyCode: Int) {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> onLeftDown()
+            KeyEvent.KEYCODE_DPAD_RIGHT -> onRightDown()
+        }
+    }
+
+    fun handlePressEnd(keyCode: Int) {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> onLeftUp()
+            KeyEvent.KEYCODE_DPAD_RIGHT -> onRightUp()
+        }
+    }
+
+    onPreviewKeyEvent {
+        val nativeEvent = it.nativeKeyEvent
+        val keyCode = nativeEvent.keyCode
+        when (nativeEvent.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (nativeEvent.repeatCount == 0) {
+                    keyDownMap[keyCode] = true
+                    handlePressStart(keyCode)
+                } else if (nativeEvent.repeatCount == 1) {
+                    keyDownMap[keyCode] = false
+                    handleLongTap(keyCode)
+                }
+            }
+
+            KeyEvent.ACTION_UP -> {
+                val wasShortPress = keyDownMap.remove(keyCode) == true
+                handlePressEnd(keyCode)
+                if (wasShortPress) handleTap(keyCode)
+            }
+        }
+
+        false
+    }
+}.pointerInput(key) {
     detectTapGestures(
         onTap = { onSelect() },
         onLongPress = { onLongSelect() },

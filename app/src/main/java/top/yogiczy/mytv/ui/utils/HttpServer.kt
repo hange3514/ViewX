@@ -1,6 +1,9 @@
 package top.yogiczy.mytv.ui.utils
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.widget.Toast
 import com.koushikdutta.async.AsyncServer
 import com.koushikdutta.async.http.body.JSONObjectBody
@@ -34,13 +37,14 @@ object HttpServer : Loggable() {
         deleteOnExit()
     }
 
+    private var appContext: Context? = null
     private var showToast: (String) -> Unit = { }
 
-    val serverUrl: String by lazy {
-        "http://${getLocalIpAddress()}:${SERVER_PORT}"
-    }
+    val serverUrl: String
+        get() = "http://${getLocalIpAddress(appContext)}:${SERVER_PORT}"
 
     fun start(context: Context, showToast: (String) -> Unit) {
+        appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val server = AsyncHttpServer()
@@ -176,26 +180,106 @@ object HttpServer : Loggable() {
         wrapResponse(response).send("success")
     }
 
-    private fun getLocalIpAddress(): String {
+    private fun getLocalIpAddress(context: Context?): String {
         val defaultIp = "0.0.0.0"
+        if (context == null) return defaultIp
 
+        // 1. 优先从 ConnectivityManager 取 Wi-Fi / 以太网 IP，不受接口名差异影响
         try {
-            val en = NetworkInterface.getNetworkInterfaces()
-            while (en.hasMoreElements()) {
-                val intf = en.nextElement()
-                val enumIpAddr = intf.inetAddresses
-                while (enumIpAddr.hasMoreElements()) {
-                    val inetAddress = enumIpAddr.nextElement()
-                    if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
-                        return inetAddress.hostAddress ?: defaultIp
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return defaultIp
+            val candidates = mutableListOf<Pair<Inet4Address, Int>>()
+
+            for (network in cm.allNetworks ?: emptyArray()) {
+                val caps = cm.getNetworkCapabilities(network) ?: continue
+                val linkProps = cm.getLinkProperties(network) ?: continue
+
+                val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                val isEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                val isVpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                val isCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+
+                for (linkAddr in linkProps.linkAddresses) {
+                    val address = linkAddr.address ?: continue
+                    if (address !is Inet4Address || address.isLoopbackAddress) continue
+
+                    var score = 0
+                    if (address.isSiteLocalAddress) score += 10
+                    when {
+                        isWifi -> score += 5
+                        isEthernet -> score += 4
+                        isVpn -> score -= 5
+                        isCellular -> score -= 10
                     }
+                    candidates.add(address to score)
                 }
             }
-            return defaultIp
-        } catch (ex: SocketException) {
-            log.e("IP Address: ${ex.message}", ex)
-            return defaultIp
+
+            candidates.maxByOrNull { it.second }?.first?.hostAddress?.let {
+                log.d("IP from ConnectivityManager: $it")
+                return it
+            }
+        } catch (ex: Exception) {
+            log.e("ConnectivityManager IP detection failed", ex)
         }
+
+        // 2. 兜底：取当前默认网络的 IPv4 地址
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    ?: return defaultIp
+                val activeNetwork = cm.activeNetwork ?: return defaultIp
+                val linkProps = cm.getLinkProperties(activeNetwork) ?: return defaultIp
+                for (linkAddr in linkProps.linkAddresses) {
+                    val address = linkAddr.address ?: continue
+                    if (address is Inet4Address && !address.isLoopbackAddress) {
+                        address.hostAddress?.let {
+                            log.d("IP from active network: $it")
+                            return it
+                        }
+                    }
+                }
+            } catch (ex: Exception) {
+                log.e("Active network IP detection failed", ex)
+            }
+        }
+
+        // 3. 最后兜底：遍历网卡，优先 site-local 和 Wi-Fi/以太网接口名
+        try {
+            val candidates = mutableListOf<Pair<Inet4Address, Int>>()
+            val en = NetworkInterface.getNetworkInterfaces()
+
+            while (en.hasMoreElements()) {
+                val intf = en.nextElement()
+                if (!intf.isUp || intf.isLoopback) continue
+
+                val name = intf.name.lowercase()
+                val isPreferred = name.contains("wlan") || name.contains("eth") || name.contains("usb") || name.contains("rndis")
+                val isIgnored = name.contains("tun") || name.contains("ppp") || name.contains("vpn")
+                        || name.contains("rmnet") || name.contains("ccmni") || name.contains("dummy")
+
+                val enumIpAddr = intf.inetAddresses
+                while (enumIpAddr.hasMoreElements()) {
+                    val address = enumIpAddr.nextElement()
+                    if (address !is Inet4Address || address.isLoopbackAddress) continue
+
+                    var score = 0
+                    if (address.isSiteLocalAddress) score += 10
+                    if (isPreferred) score += 5
+                    if (isIgnored) score -= 10
+                    candidates.add(address to score)
+                }
+            }
+
+            candidates.maxByOrNull { it.second }?.first?.hostAddress?.let {
+                log.d("IP from NetworkInterface: $it")
+                return it
+            }
+        } catch (ex: SocketException) {
+            log.e("NetworkInterface IP detection failed", ex)
+        }
+
+        return defaultIp
     }
 }
 

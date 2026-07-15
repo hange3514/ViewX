@@ -21,6 +21,26 @@ data class Iptv(
      * 播放地址
      */
     val urlList: List<String> = emptyList(),
+
+    /**
+     * 回放类型，如 default、append、shift、flussonic 等
+     */
+    val catchup: String = "",
+
+    /**
+     * 回放地址模板
+     */
+    val catchupSource: String = "",
+
+    /**
+     * 回放天数
+     */
+    val catchupDays: Int = 0,
+
+    /**
+     * EPG 中的频道 ID（tvg-id），优先用于精确匹配节目单。
+     */
+    val tvgId: String = "",
 ) {
     companion object {
         val EXAMPLE = Iptv(

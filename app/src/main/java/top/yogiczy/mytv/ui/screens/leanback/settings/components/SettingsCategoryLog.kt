@@ -30,7 +30,7 @@ fun LeanbackSettingsCategoryLog(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 10.dp),
     ) {
-        items(historySorted) {
+        items(historySorted, key = { "${it.time}_${it.tag}_${it.message.hashCode()}" }) {
             LeanbackSettingsCategoryListItem(
                 headlineContent = "${it.level.toString()[0]} ${it.tag}",
                 supportingContent = it.message,

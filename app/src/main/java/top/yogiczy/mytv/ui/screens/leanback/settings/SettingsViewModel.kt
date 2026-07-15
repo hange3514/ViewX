@@ -146,6 +146,14 @@ class LeanbackSettingsViewModel : ViewModel() {
             SP.epgEnable = value
         }
 
+    private var _epgReplayEnable by mutableStateOf(SP.epgReplayEnable)
+    var epgReplayEnable: Boolean
+        get() = _epgReplayEnable
+        set(value) {
+            _epgReplayEnable = value
+            SP.epgReplayEnable = value
+        }
+
     private var _epgXmlUrl by mutableStateOf(SP.epgXmlUrl)
     var epgXmlUrl: String
         get() = _epgXmlUrl
@@ -249,4 +257,5 @@ class LeanbackSettingsViewModel : ViewModel() {
             _videoPlayerAspectRatio = value
             SP.videoPlayerAspectRatio = value
         }
+
 }

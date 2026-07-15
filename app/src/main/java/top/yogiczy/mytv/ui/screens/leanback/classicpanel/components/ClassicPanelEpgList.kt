@@ -42,10 +42,15 @@ import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
-import top.yogiczy.mytv.data.entities.EpgProgramme.Companion.isLive
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
+import top.yogiczy.mytv.data.entities.indexOfCurrent
+import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
+import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
+import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.max
@@ -54,11 +59,13 @@ import kotlin.math.max
 @Composable
 fun LeanbackClassicPanelEpgList(
     modifier: Modifier = Modifier,
+    iptvProvider: () -> Iptv = { Iptv() },
     epgProvider: () -> Epg? = { Epg() },
     exitFocusRequesterProvider: () -> FocusRequester = { FocusRequester.Default },
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onUserAction: () -> Unit = {},
 ) {
-    val dateFormat = SimpleDateFormat("E MM-dd", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("E MM-dd", Locale.getDefault()) }
     val epg = epgProvider()
 
     if (epg != null && epg.programmes.isNotEmpty()) {
@@ -71,7 +78,7 @@ fun LeanbackClassicPanelEpgList(
         }
 
         val programmesListState = remember(programmes) {
-            TvLazyListState(max(0, programmes.indexOfFirst { it.isLive() } - 2))
+            TvLazyListState(max(0, programmes.indexOfCurrent(System.currentTimeMillis()) - 2))
         }
         val daysListState = remember(programmesGroup) {
             TvLazyListState(max(0, programmesGroup.keys.indexOf(currentDay) - 2))
@@ -104,9 +111,11 @@ fun LeanbackClassicPanelEpgList(
                         }
                     },
             ) {
-                items(programmes) { programme ->
+                items(programmes, key = { it.startAt }) { programme ->
                     LeanbackClassicPanelEpgItem(
+                        iptvProvider = iptvProvider,
                         epgProgrammeProvider = { programme },
+                        onPlayCatchup = onPlayCatchup,
                     )
                 }
             }
@@ -122,7 +131,7 @@ fun LeanbackClassicPanelEpgList(
                         .background(MaterialTheme.colorScheme.background.copy(0.7f))
                 ) {
 
-                    items(programmesGroup.keys.toList()) {
+                    items(programmesGroup.keys.toList(), key = { it }) {
                         LeanbackClassicPanelEpgDayItem(
                             dayProvider = { it },
                             currentDayProvider = { currentDay },
@@ -138,10 +147,15 @@ fun LeanbackClassicPanelEpgList(
 @Composable
 private fun LeanbackClassicPanelEpgItem(
     modifier: Modifier = Modifier,
+    iptvProvider: () -> Iptv = { Iptv() },
     epgProgrammeProvider: () -> EpgProgramme = { EpgProgramme() },
+    onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
 ) {
     val programme = epgProgrammeProvider()
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val iptv = iptvProvider()
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val isLive = rememberProgrammeIsLive(programme)
+    val isReplayable = rememberProgrammeIsReplayable(programme, iptv.catchupSource.isNotBlank())
 
     val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
@@ -158,7 +172,19 @@ private fun LeanbackClassicPanelEpgItem(
                 }
                 .handleLeanbackKeyEvents(
                     onSelect = {
-                        focusRequester.requestFocus()
+                        if (isReplayable) {
+                            onPlayCatchup(iptv, programme)
+                        } else {
+                            when {
+                                iptv.catchupSource.isBlank() ->
+                                    LeanbackToastState.I.showToast("该频道不支持回放")
+
+                                programme.startAt > CurrentTime.ms.value ->
+                                    LeanbackToastState.I.showToast("节目尚未开始")
+
+                                else -> focusRequester.requestFocus()
+                            }
+                        }
                     },
                 ),
             colors = ListItemDefaults.colors(
@@ -167,8 +193,22 @@ private fun LeanbackClassicPanelEpgItem(
                     alpha = 0.5f
                 ),
             ),
-            selected = programme.isLive(),
-            onClick = { },
+            selected = isLive,
+            onClick = {
+                if (isReplayable) {
+                    onPlayCatchup(iptv, programme)
+                } else {
+                    when {
+                        iptv.catchupSource.isBlank() ->
+                            LeanbackToastState.I.showToast("该频道不支持回放")
+
+                        programme.startAt > CurrentTime.ms.value ->
+                            LeanbackToastState.I.showToast("节目尚未开始")
+
+                        else -> focusRequester.requestFocus()
+                    }
+                }
+            },
             headlineContent = {
                 Text(
                     text = programme.title,
@@ -185,8 +225,12 @@ private fun LeanbackClassicPanelEpgItem(
                 )
             },
             trailingContent = {
-                if (programme.isLive()) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "playing")
+                when {
+                    isLive -> Icon(Icons.Default.PlayArrow, contentDescription = "playing")
+                    isReplayable -> Text(
+                        text = "回放",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             },
         )
@@ -202,11 +246,11 @@ private fun LeanbackClassicPanelEpgDayItem(
 ) {
     val day = dayProvider()
 
-    val dateFormat = SimpleDateFormat("E MM-dd", Locale.getDefault())
-    val today = dateFormat.format(System.currentTimeMillis())
-    val tomorrow = dateFormat.format(System.currentTimeMillis() + 24 * 3600 * 1000)
+    val dateFormat = remember { SimpleDateFormat("E MM-dd", Locale.getDefault()) }
+    val today = remember { dateFormat.format(System.currentTimeMillis()) }
+    val tomorrow = remember { dateFormat.format(System.currentTimeMillis() + 24 * 3600 * 1000) }
     val dayAfterTomorrow =
-        dateFormat.format(System.currentTimeMillis() + 48 * 3600 * 1000)
+        remember { dateFormat.format(System.currentTimeMillis() + 48 * 3600 * 1000) }
 
     val focusRequester = remember { FocusRequester() }
     val isSelected by remember(currentDayProvider()) { derivedStateOf { day == currentDayProvider() } }

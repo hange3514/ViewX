@@ -68,6 +68,7 @@ fun LeanbackSettingsCategoryVideoPlayer(
                 remoteConfig = true,
             )
         }
+
     }
 }
 

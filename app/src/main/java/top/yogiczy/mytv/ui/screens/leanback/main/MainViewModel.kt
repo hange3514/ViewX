@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.data.entities.EpgList
 import top.yogiczy.mytv.data.entities.IptvGroupList
-import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvList
 import top.yogiczy.mytv.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.data.utils.Constants
@@ -69,11 +68,15 @@ class LeanbackMainViewModel : ViewModel() {
         if (_uiState.value is LeanbackMainUiState.Ready) {
             val iptvGroupList = (_uiState.value as LeanbackMainUiState.Ready).iptvGroupList
 
+            val filteredChannels = iptvGroupList.iptvList.map { it.channelName }
+            val filteredChannelIds = iptvGroupList.iptvList.map { it.tvgId }.filter { it.isNotBlank() }
+
             flow {
                 emit(
                     epgRepository.getEpgList(
                         xmlUrl = SP.epgXmlUrl,
-                        filteredChannels = iptvGroupList.iptvList.map { it.channelName },
+                        filteredChannels = filteredChannels,
+                        filteredChannelIds = filteredChannelIds,
                         refreshTimeThreshold = SP.epgRefreshTimeThreshold,
                     )
                 )

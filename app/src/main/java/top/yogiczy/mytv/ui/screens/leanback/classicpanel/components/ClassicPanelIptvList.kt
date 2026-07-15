@@ -38,15 +38,16 @@ import androidx.tv.foundation.lazy.list.TvLazyListState
 import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
+import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgList
-import top.yogiczy.mytv.data.entities.EpgList.Companion.currentProgrammes
-import top.yogiczy.mytv.data.entities.EpgProgramme.Companion.progress
-import top.yogiczy.mytv.data.entities.EpgProgrammeCurrent
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvGroup
 import top.yogiczy.mytv.data.entities.IptvList
+import top.yogiczy.mytv.data.entities.findByIptv
+import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 import kotlin.math.max
 
 @Composable
@@ -65,8 +66,9 @@ fun LeanbackClassicPanelIptvList(
 ) {
     val focusManager = LocalFocusManager.current
     val iptvList = iptvListProvider()
+    val iptvGroup = iptvGroupProvider()
     val initialIptv = initialIptvProvider()
-
+    val epgList = epgListProvider()
     var hasFocused by rememberSaveable { mutableStateOf(!iptvList.contains(initialIptv)) }
     val itemFocusRequesterList = remember(iptvList) {
         List(iptvList.size) { FocusRequester() }
@@ -86,7 +88,7 @@ fun LeanbackClassicPanelIptvList(
         }
     }
 
-    val listState = remember(iptvGroupProvider()) {
+    val listState = remember(iptvGroup) {
         TvLazyListState(
             if (hasFocused) 0
             else max(0, iptvList.indexOf(initialIptv) - 2)
@@ -108,25 +110,17 @@ fun LeanbackClassicPanelIptvList(
             .width(220.dp)
             .background(MaterialTheme.colorScheme.background.copy(0.8f)),
     ) {
-        itemsIndexed(iptvList, key = { _, iptv -> iptv.hashCode() }) { index, iptv ->
+        itemsIndexed(
+            items = iptvList,
+            key = { _, iptv -> iptv.urlList.firstOrNull() ?: iptv.name },
+        ) { index, iptv ->
             val isSelected by remember { derivedStateOf { iptv == focusedIptv } }
             val initialFocused by remember {
                 derivedStateOf { !hasFocused && iptv == initialIptv }
             }
-
-            LeanbackClassicPanelIptvItem(
-                iptvProvider = { iptv },
-                epgProgrammeCurrentProvider = { epgListProvider().currentProgrammes(iptv) },
-                focusRequesterProvider = { itemFocusRequesterList[index] },
-                isSelectedProvider = { isSelected },
-                initialFocusedProvider = { initialFocused },
-                onInitialFocused = { hasFocused = true },
-                onFocused = {
-                    focusedIptv = iptv
-                    onIptvFocused(iptv, itemFocusRequesterList[index])
-                },
-                onSelected = { onIptvSelected(iptv) },
-                onFavoriteToggle = {
+            val onSelected = remember(iptv) { { onIptvSelected(iptv) } }
+            val onFavoriteToggle = remember(iptv) {
+                {
                     if (isFavoriteListProvider()) {
                         if (iptvList.size == 1) {
                             focusManager.moveFocus(FocusDirection.Left)
@@ -139,7 +133,25 @@ fun LeanbackClassicPanelIptvList(
                         }
                     }
                     onIptvFavoriteToggle(iptv)
-                },
+                }
+            }
+            val onFocused = remember(iptv, index) {
+                {
+                    focusedIptv = iptv
+                    onIptvFocused(iptv, itemFocusRequesterList[index])
+                }
+            }
+
+            LeanbackClassicPanelIptvItem(
+                iptvProvider = { iptv },
+                epgProvider = { epgList.findByIptv(iptv) },
+                focusRequesterProvider = { itemFocusRequesterList[index] },
+                isSelectedProvider = { isSelected },
+                initialFocusedProvider = { initialFocused },
+                onInitialFocused = { hasFocused = true },
+                onFocused = onFocused,
+                onSelected = onSelected,
+                onFavoriteToggle = onFavoriteToggle,
                 showProgrammeProgressProvider = showProgrammeProgressProvider,
             )
         }
@@ -150,7 +162,7 @@ fun LeanbackClassicPanelIptvList(
 private fun LeanbackClassicPanelIptvItem(
     modifier: Modifier = Modifier,
     iptvProvider: () -> Iptv = { Iptv() },
-    epgProgrammeCurrentProvider: () -> EpgProgrammeCurrent? = { null },
+    epgProvider: () -> Epg? = { null },
     focusRequesterProvider: () -> FocusRequester = { FocusRequester() },
     isSelectedProvider: () -> Boolean = { false },
     initialFocusedProvider: () -> Boolean = { false },
@@ -162,7 +174,7 @@ private fun LeanbackClassicPanelIptvItem(
 ) {
     val iptv = iptvProvider()
     val focusRequester = focusRequesterProvider()
-    val currentProgramme = epgProgrammeCurrentProvider()?.now
+    val currentProgramme = rememberCurrentProgramme(epgProvider()?.programmes ?: emptyList())
 
     var isFocused by remember { mutableStateOf(false) }
 
@@ -191,7 +203,7 @@ private fun LeanbackClassicPanelIptvItem(
                         }
                     }
                     .handleLeanbackKeyEvents(
-                        key = iptv.hashCode(),
+                        key = iptv.urlList.firstOrNull() ?: iptv.name,
                         onSelect = {
                             if (isFocused) onSelected()
                             else focusRequester.requestFocus()
@@ -223,14 +235,9 @@ private fun LeanbackClassicPanelIptvItem(
             )
 
             if (showProgrammeProgressProvider() && currentProgramme != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth(currentProgramme.progress())
-                        .height(3.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                        ),
+                ProgrammeProgressIndicator(
+                    programme = currentProgramme,
+                    modifier = Modifier.align(Alignment.BottomStart),
                 )
             }
         }

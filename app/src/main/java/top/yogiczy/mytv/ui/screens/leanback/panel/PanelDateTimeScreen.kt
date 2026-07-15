@@ -7,19 +7,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.SP
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -30,41 +27,36 @@ fun LeanbackPanelDateTimeScreen(
     showModeProvider: () -> SP.UiTimeShowMode = { SP.UiTimeShowMode.HIDDEN },
 ) {
     val childPadding = rememberLeanbackChildPadding()
+    val timestamp by CurrentTime.ms
+    val showMode = showModeProvider()
 
-    var timeText by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val timestamp = System.currentTimeMillis()
+    val timeFormat = remember(showMode) {
+        when (showMode) {
+            SP.UiTimeShowMode.ALWAYS -> SimpleDateFormat("HH:mm", Locale.getDefault())
+            else -> SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        }
+    }
 
-            visible = when (showModeProvider()) {
-                SP.UiTimeShowMode.HIDDEN -> false
-                SP.UiTimeShowMode.ALWAYS -> true
-
-                SP.UiTimeShowMode.EVERY_HOUR -> {
-                    timestamp % 3600000 <= (Constants.UI_TIME_SHOW_RANGE + 1000) || timestamp % 3600000 >= 3600000 - Constants.UI_TIME_SHOW_RANGE
-                }
-
-                SP.UiTimeShowMode.HALF_HOUR -> {
-                    timestamp % 1800000 <= (Constants.UI_TIME_SHOW_RANGE + 1000) || timestamp % 1800000 >= 1800000 - Constants.UI_TIME_SHOW_RANGE
-                }
+    val visible = remember(timestamp, showMode) {
+        when (showMode) {
+            SP.UiTimeShowMode.HIDDEN -> false
+            SP.UiTimeShowMode.ALWAYS -> true
+            SP.UiTimeShowMode.EVERY_HOUR -> {
+                timestamp % 3600000 <= (Constants.UI_TIME_SHOW_RANGE + 1000)
+                        || timestamp % 3600000 >= 3600000 - Constants.UI_TIME_SHOW_RANGE
             }
 
-            if (visible) {
-                timeText = when (showModeProvider()) {
-                    SP.UiTimeShowMode.ALWAYS -> SimpleDateFormat("HH:mm", Locale.getDefault())
-                    else -> SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                }.format(timestamp)
+            SP.UiTimeShowMode.HALF_HOUR -> {
+                timestamp % 1800000 <= (Constants.UI_TIME_SHOW_RANGE + 1000)
+                        || timestamp % 1800000 >= 1800000 - Constants.UI_TIME_SHOW_RANGE
             }
-
-            delay(1000)
         }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         if (visible) {
             Text(
-                text = timeText,
+                text = timeFormat.format(timestamp),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier
                     .align(Alignment.TopEnd)

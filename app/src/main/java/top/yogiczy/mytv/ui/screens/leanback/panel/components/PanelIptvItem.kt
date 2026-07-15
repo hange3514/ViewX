@@ -29,17 +29,20 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.CardDefaults
+import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
-import top.yogiczy.mytv.data.entities.EpgProgramme.Companion.progress
+import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.Iptv
+import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 
 @Composable
 fun LeanbackPanelIptvItem(
     modifier: Modifier = Modifier,
     iptvProvider: () -> Iptv = { Iptv() },
-    currentProgrammeProvider: () -> EpgProgramme? = { null },
+    epgProvider: () -> Epg? = { null },
     showProgrammeProgressProvider: () -> Boolean = { false },
     onIptvSelected: () -> Unit = {},
     onIptvFavoriteToggle: () -> Unit = {},
@@ -52,7 +55,7 @@ fun LeanbackPanelIptvItem(
     val focusRequester = remember { FocusRequester() }
 
     val iptv = iptvProvider()
-    val currentProgramme = currentProgrammeProvider()
+    val currentProgramme = rememberCurrentProgramme(epgProvider()?.programmes ?: emptyList())
     val showProgrammeProgress = showProgrammeProgressProvider()
 
     LaunchedEffect(Unit) {
@@ -127,15 +130,11 @@ fun LeanbackPanelIptvItem(
 
             // 节目进度条
             if (showProgrammeProgress && currentProgramme != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth(currentProgramme.progress())
-                        .height(3.dp)
-                        .background(
-                            if (isFocused) MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                        ),
+                ProgrammeProgressIndicator(
+                    programme = currentProgramme,
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    color = if (isFocused) MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                 )
             }
         }
@@ -152,11 +151,16 @@ private fun LeanbackPanelIptvItemPreview() {
         ) {
             LeanbackPanelIptvItem(
                 iptvProvider = { Iptv.EXAMPLE },
-                currentProgrammeProvider = {
-                    EpgProgramme(
-                        startAt = System.currentTimeMillis() - 100000,
-                        endAt = System.currentTimeMillis() + 200000,
-                        title = "新闻联播",
+                epgProvider = {
+                    Epg(
+                        channel = Iptv.EXAMPLE.channelName,
+                        programmes = EpgProgrammeList(listOf(
+                            EpgProgramme(
+                                startAt = System.currentTimeMillis() - 100000,
+                                endAt = System.currentTimeMillis() + 200000,
+                                title = "新闻联播",
+                            )
+                        ))
                     )
                 },
                 showProgrammeProgressProvider = { true },
@@ -164,11 +168,16 @@ private fun LeanbackPanelIptvItemPreview() {
 
             LeanbackPanelIptvItem(
                 iptvProvider = { Iptv.EXAMPLE },
-                currentProgrammeProvider = {
-                    EpgProgramme(
-                        startAt = System.currentTimeMillis() - 100000,
-                        endAt = System.currentTimeMillis() + 200000,
-                        title = "新闻联播",
+                epgProvider = {
+                    Epg(
+                        channel = Iptv.EXAMPLE.channelName,
+                        programmes = EpgProgrammeList(listOf(
+                            EpgProgramme(
+                                startAt = System.currentTimeMillis() - 100000,
+                                endAt = System.currentTimeMillis() + 200000,
+                                title = "新闻联播",
+                            )
+                        ))
                     )
                 },
                 showProgrammeProgressProvider = { true },

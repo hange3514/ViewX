@@ -174,7 +174,10 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
     onSelected: (String) -> Unit = {},
     onDeleted: (String) -> Unit = {},
 ) {
-    val iptvSourceHistory = listOf(Constants.IPTV_SOURCE_URL) + iptvSourceHistoryProvider()
+    val iptvSourceHistoryProviderValue = iptvSourceHistoryProvider()
+    val iptvSourceHistory = remember(iptvSourceHistoryProviderValue) {
+        listOf(Constants.IPTV_SOURCE_URL) + iptvSourceHistoryProviderValue
+    }
     val currentIptvSource = currentIptvSourceProvider()
 
     if (showDialogProvider()) {
@@ -194,7 +197,7 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(iptvSourceHistory) { source ->
+                    items(iptvSourceHistory, key = { it }) { source ->
                         val focusRequester = remember { FocusRequester() }
                         var isFocused by remember { mutableStateOf(false) }
 
