@@ -132,22 +132,6 @@ class LeanbackMainContentState(
                 changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
             }
         }
-
-        // TODO(测试)：启动 10s 后自动进入回放模式，用于验证 seek URL 生成
-        coroutineScope.launch {
-            delay(10_000)
-            if (_currentIptv.catchupSource.isNotBlank()) {
-                val now = System.currentTimeMillis()
-                playCatchup(
-                    _currentIptv,
-                    EpgProgramme(
-                        startAt = now - 3_600_000,
-                        endAt = now,
-                        title = "测试回放",
-                    ),
-                )
-            }
-        }
     }
 
     private fun getPrevIptv(): Iptv {
