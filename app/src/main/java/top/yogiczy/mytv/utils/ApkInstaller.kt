@@ -14,11 +14,17 @@ object ApkInstaller {
         val file = File(filePath)
         if (file.exists()) {
             val cacheDir = context.cacheDir
-            val cachedApkFile = File(cacheDir, file.name).apply {
-                writeBytes(file.readBytes())
-                // 解决Android6 无法解析安装包
-                setReadable(true, false)
+            val cachedApkFile = File(cacheDir, file.name)
+
+            // 源文件已在 cacheDir 时就是同一个文件，跳过自复制；
+            // 否则流式拷贝，避免 85MB APK 一次性读进内存
+            if (cachedApkFile.absolutePath != file.absolutePath) {
+                file.inputStream().use { input ->
+                    cachedApkFile.outputStream().use { input.copyTo(it) }
+                }
             }
+            // 解决Android6 无法解析安装包
+            cachedApkFile.setReadable(true, false)
 
             val uri =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) FileProvider.getUriForFile(

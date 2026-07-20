@@ -15,7 +15,7 @@ class XmlGzEpgFetcher : EpgFetcher {
         val gzData = response.body!!.bytes()
         val stringBuilder = StringBuilder()
         GZIPInputStream(ByteArrayInputStream(gzData)).use { gzipInputStream ->
-            BufferedReader(InputStreamReader(gzipInputStream)).use { reader ->
+            BufferedReader(InputStreamReader(gzipInputStream, Charsets.UTF_8)).use { reader ->
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
                     stringBuilder.append(line).append("\n")

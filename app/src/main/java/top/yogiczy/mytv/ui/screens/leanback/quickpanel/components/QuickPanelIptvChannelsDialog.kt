@@ -193,15 +193,16 @@ private fun rememberIptvUrlDelay(url: String): Long {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val client = OkHttpClient()
-            val request = Request.Builder().url(url).build()
-
+            // url 来自直播源，畸形 URL 时 Request.Builder 会抛 IllegalArgumentException，
+            // 统一兜底，避免单个坏线路导致整个应用崩溃
             elapsedTime = measureTimeMillis {
                 try {
+                    val client = OkHttpClient()
+                    val request = Request.Builder().url(url).build()
                     client.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) throw IOException("Unexpected code $response")
                     }
-                } catch (_: IOException) {
+                } catch (_: Exception) {
                     hasError = true
                 }
             }

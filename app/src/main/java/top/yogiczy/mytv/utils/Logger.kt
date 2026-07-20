@@ -38,13 +38,18 @@ class Logger private constructor(
     companion object {
         fun create(tag: String) = Logger(tag)
 
-        private val _history = mutableListOf<HistoryItem>()
+        // 播放器回调/IO 协程/AsyncServer 线程都会并发读写，需加锁保护
+        private val _history = java.util.Collections.synchronizedList(mutableListOf<HistoryItem>())
+
+        /** 返回快照，避免调用方遍历与写入并发导致 ConcurrentModificationException */
         val history: List<HistoryItem>
-            get() = _history
+            get() = synchronized(_history) { _history.toList() }
 
         fun addHistoryItem(item: HistoryItem) {
-            _history.add(item)
-            if (_history.size > Constants.LOG_HISTORY_MAX_SIZE) _history.removeAt(0)
+            synchronized(_history) {
+                _history.add(item)
+                while (_history.size > Constants.LOG_HISTORY_MAX_SIZE) _history.removeAt(0)
+            }
         }
     }
 

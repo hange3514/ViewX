@@ -27,7 +27,7 @@ class LeanbackCompositeVideoPlayer(
         player.onError { error -> triggerError(error) }
         player.onReady { triggerReady() }
         player.onBuffering { buffering -> triggerBuffering(buffering) }
-        player.onPrepared { triggerPrepared() }
+        player.onPrepared { notifyPrepared() }
         player.onMetadata { meta ->
             metadata = meta
             triggerMetadata(meta)

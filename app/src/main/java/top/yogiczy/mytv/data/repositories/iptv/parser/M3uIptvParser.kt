@@ -18,13 +18,18 @@ class M3uIptvParser : IptvParser {
         lines.forEachIndexed { index, line ->
             if (!line.startsWith("#EXTINF")) return@forEachIndexed
 
+            // 播放地址在下一行；源文件被截断或下一行仍是指令时跳过该条目，防越界/误把注释当 URL
+            val url = lines.getOrNull(index + 1)?.trim()
+                ?.takeIf { it.isNotBlank() && !it.startsWith("#") }
+                ?: return@forEachIndexed
+
             val name = line.split(",").last()
-            val channelName = Regex("tvg-name=\"(.+?)\"").find(line)?.groupValues?.get(1) ?: name
-            val tvgId = Regex("tvg-id=\"(.+?)\"").find(line)?.groupValues?.get(1) ?: ""
-            val groupName = Regex("group-title=\"(.+?)\"").find(line)?.groupValues?.get(1) ?: "其他"
-            val catchup = Regex("catchup=\"(.+?)\"").find(line)?.groupValues?.get(1) ?: ""
-            val catchupSource = Regex("catchup-source=\"(.+?)\"").find(line)?.groupValues?.get(1) ?: ""
-            val catchupDays = Regex("catchup-days=\"(.+?)\"").find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val channelName = TVG_NAME_REGEX.find(line)?.groupValues?.get(1) ?: name
+            val tvgId = TVG_ID_REGEX.find(line)?.groupValues?.get(1) ?: ""
+            val groupName = GROUP_TITLE_REGEX.find(line)?.groupValues?.get(1) ?: "其他"
+            val catchup = CATCHUP_REGEX.find(line)?.groupValues?.get(1) ?: ""
+            val catchupSource = CATCHUP_SOURCE_REGEX.find(line)?.groupValues?.get(1) ?: ""
+            val catchupDays = CATCHUP_DAYS_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
             iptvList.add(
                 IptvResponseItem(
@@ -32,7 +37,7 @@ class M3uIptvParser : IptvParser {
                     channelName = channelName.trim(),
                     tvgId = tvgId.trim(),
                     groupName = groupName.trim(),
-                    url = lines[index + 1].trim(),
+                    url = url,
                     catchup = catchup.trim(),
                     catchupSource = catchupSource.trim(),
                     catchupDays = catchupDays,
@@ -68,4 +73,14 @@ class M3uIptvParser : IptvParser {
         val catchupSource: String = "",
         val catchupDays: Int = 0,
     )
+
+    private companion object {
+        // 正则提前编译，避免逐行构造
+        val TVG_NAME_REGEX = Regex("tvg-name=\"(.+?)\"")
+        val TVG_ID_REGEX = Regex("tvg-id=\"(.+?)\"")
+        val GROUP_TITLE_REGEX = Regex("group-title=\"(.+?)\"")
+        val CATCHUP_REGEX = Regex("catchup=\"(.+?)\"")
+        val CATCHUP_SOURCE_REGEX = Regex("catchup-source=\"(.+?)\"")
+        val CATCHUP_DAYS_REGEX = Regex("catchup-days=\"(.+?)\"")
+    }
 }

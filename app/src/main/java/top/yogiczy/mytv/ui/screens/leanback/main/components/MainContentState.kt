@@ -106,12 +106,16 @@ class LeanbackMainContentState(
         }
 
         videoPlayerState.onError {
+            // 先记录失败线路的域名，changeCurrentIptv 会更新 idx，
+            // 之后再读 urlList[idx] 读到的是新线路，会误删好域名
+            val failedUrlHost = getUrlHost(_currentIptv.urlList[_currentIptvUrlIdx])
+
             if (_currentIptvUrlIdx < _currentIptv.urlList.size - 1) {
                 changeCurrentIptv(_currentIptv, _currentIptvUrlIdx + 1)
             }
 
             // 从记忆中删除不可播放的域名
-            SP.iptvPlayableHostList -= getUrlHost(_currentIptv.urlList[_currentIptvUrlIdx])
+            SP.iptvPlayableHostList -= failedUrlHost
         }
 
         videoPlayerState.onCutoff {
@@ -150,6 +154,9 @@ class LeanbackMainContentState(
 
     fun changeCurrentIptv(iptv: Iptv, urlIdx: Int? = null) {
         _isPanelVisible = false
+
+        // 无可用线路的频道（如空源/解析异常）直接忽略，防止下标越界
+        if (iptv.urlList.isEmpty()) return
 
         if (iptv == _currentIptv && urlIdx == null && !_isReplayMode) return
 

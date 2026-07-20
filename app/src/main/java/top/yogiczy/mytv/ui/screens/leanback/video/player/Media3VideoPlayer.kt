@@ -219,6 +219,8 @@ class LeanbackMedia3VideoPlayer(
     }
 
     override fun release() {
+        updatePositionJob?.cancel()
+        updatePositionJob = null
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
         videoPlayer.release()

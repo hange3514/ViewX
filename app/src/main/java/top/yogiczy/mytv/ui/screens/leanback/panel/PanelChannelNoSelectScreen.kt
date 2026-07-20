@@ -57,6 +57,8 @@ class LeanbackPanelChannelNoSelectState(
     val channelNo get() = _channelNo
 
     fun input(no: Int) {
+        // 限制最大长度，防止连按数字导致 confirm 时 toInt 溢出崩溃
+        if (_channelNo.length >= MAX_CHANNEL_NO_LENGTH) return
         _channelNo += no.toString()
         channel.trySend(_channelNo)
     }
@@ -65,7 +67,7 @@ class LeanbackPanelChannelNoSelectState(
 
     @OptIn(FlowPreview::class)
     suspend fun observe() {
-        channel.consumeAsFlow().debounce { (4 - it.length) * 1000L }.collect {
+        channel.consumeAsFlow().debounce { (4 - it.length).coerceAtLeast(0) * 1000L }.collect {
             onChannelNoConfirm(it)
             _channelNo = ""
         }
@@ -78,3 +80,6 @@ fun rememberLeanbackPanelChannelNoSelectState(
 ) = remember {
     LeanbackPanelChannelNoSelectState(onChannelNoConfirm)
 }.also { LaunchedEffect(it) { it.observe() } }
+
+/** 数字选台最大输入位数 */
+private const val MAX_CHANNEL_NO_LENGTH = 4

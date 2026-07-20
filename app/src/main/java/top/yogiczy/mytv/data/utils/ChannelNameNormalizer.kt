@@ -52,7 +52,7 @@ object ChannelNameNormalizer {
         }.joinToString("")
 
         // 去除所有空白
-        result = result.replace(Regex("\\s+"), "")
+        result = result.replace(WHITESPACE_REGEX, "")
 
         // 转小写
         result = result.lowercase()
@@ -81,8 +81,13 @@ object ChannelNameNormalizer {
      *   （用于区分 CCTV-1 与 CCTV-11，同时允许 CCTV-1 匹配 CCTV-1综合高清）。
      */
     fun matches(channelA: String, channelB: String): Boolean {
-        val a = normalize(channelA)
-        val b = normalize(channelB)
+        return matchesNormalized(normalize(channelA), normalize(channelB))
+    }
+
+    /**
+     * 对已归一化的名称做匹配判断，供批量匹配时复用归一化结果，避免重复归一化开销。
+     */
+    fun matchesNormalized(a: String, b: String): Boolean {
         if (a == b) return true
         if (a.isEmpty() || b.isEmpty()) return false
 
@@ -92,6 +97,8 @@ object ChannelNameNormalizer {
             return a.startsWith(b) && !a.getOrNull(b.length)?.isDigit()!!
         }
     }
+
+    private val WHITESPACE_REGEX = Regex("\\s+")
 }
 
 fun String.matchesChannel(other: String): Boolean =

@@ -43,8 +43,18 @@ object HttpServer : Loggable() {
     val serverUrl: String
         get() = "http://${getLocalIpAddress(appContext)}:${SERVER_PORT}"
 
+    @Volatile
+    private var started = false
+
+    @Synchronized
     fun start(context: Context, showToast: (String) -> Unit) {
         appContext = context.applicationContext
+        // 幂等：Activity 重建（如推送直播源后的软重启）会重复调用，
+        // 重复 listen 同一端口会误报"设置服务启动失败"
+        this.showToast = showToast
+        if (started) return
+        started = true
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val server = AsyncHttpServer()
@@ -101,7 +111,7 @@ object HttpServer : Loggable() {
     ) {
         wrapResponse(response).apply {
             setContentType(contentType)
-            send(context.resources.openRawResource(id).readBytes().decodeToString())
+            send(context.resources.openRawResource(id).use { it.readBytes() }.decodeToString())
         }
     }
 
@@ -128,9 +138,10 @@ object HttpServer : Loggable() {
         response: AsyncHttpServerResponse,
     ) {
         val body = request.getBody<JSONObjectBody>().get()
-        val iptvSourceUrl = body.get("iptvSourceUrl").toString()
-        val epgXmlUrl = body.get("epgXmlUrl").toString()
-        val videoPlayerUserAgent = body.get("videoPlayerUserAgent").toString()
+        // 字段可能缺失（第三方调用/旧版页面），缺省保持当前值，避免 JSONException
+        val iptvSourceUrl = body.optString("iptvSourceUrl", SP.iptvSourceUrl)
+        val epgXmlUrl = body.optString("epgXmlUrl", SP.epgXmlUrl)
+        val videoPlayerUserAgent = body.optString("videoPlayerUserAgent", SP.videoPlayerUserAgent)
 
         if (SP.iptvSourceUrl != iptvSourceUrl) {
             SP.iptvSourceUrl = iptvSourceUrl
@@ -151,6 +162,7 @@ object HttpServer : Loggable() {
         wrapResponse(response).send("success")
     }
 
+    @Synchronized
     private fun handleUploadApk(
         request: AsyncHttpServerRequest,
         response: AsyncHttpServerResponse,
@@ -158,27 +170,43 @@ object HttpServer : Loggable() {
     ) {
         val body = request.getBody<MultipartFormDataBody>()
 
+        // 串行化 + 先删旧文件，避免并发上传交错写坏安装包
+        uploadedApkFile.delete()
         val os = uploadedApkFile.outputStream()
         val contentLength = request.headers["Content-Length"]?.toLong() ?: 1
         var hasReceived = 0L
 
-        body.setMultipartCallback { part ->
-            if (part.isFile) {
-                body.setDataCallback { _, bb ->
-                    val byteArray = bb.allByteArray
-                    hasReceived += byteArray.size
-                    showToast("正在接收文件: ${(hasReceived * 100f / contentLength).toInt()}%")
-                    os.write(byteArray)
+        try {
+            body.setMultipartCallback { part ->
+                if (part.isFile) {
+                    body.setDataCallback { _, bb ->
+                        val byteArray = bb.allByteArray
+                        hasReceived += byteArray.size
+                        showToast("正在接收文件: ${(hasReceived * 100f / contentLength).toInt()}%")
+                        os.write(byteArray)
+                    }
                 }
             }
-        }
 
-        body.setEndCallback {
-            showToast("文件接收完成")
-            body.dataEmitter.close()
-            os.flush()
-            os.close()
-            ApkInstaller.installApk(context, uploadedApkFile.path)
+            body.setEndCallback {
+                try {
+                    os.flush()
+                    showToast("文件接收完成")
+                    body.dataEmitter.close()
+                    ApkInstaller.installApk(context, uploadedApkFile.path)
+                } finally {
+                    try {
+                        os.close()
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            try {
+                os.close()
+            } catch (_: Exception) {
+            }
+            throw ex
         }
 
         wrapResponse(response).send("success")

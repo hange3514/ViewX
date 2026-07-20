@@ -177,12 +177,12 @@ object SP {
 
     /** 直播源可播放host列表 */
     var iptvPlayableHostList: Set<String>
-        get() = sp.getStringSet(KEY.IPTV_PLAYABLE_HOST_LIST.name, emptySet()) ?: emptySet()
+        get() = (sp.getStringSet(KEY.IPTV_PLAYABLE_HOST_LIST.name, emptySet()) ?: emptySet()).toSet()
         set(value) = sp.edit().putStringSet(KEY.IPTV_PLAYABLE_HOST_LIST.name, value).apply()
 
     /** 直播源历史列表 */
     var iptvSourceUrlHistoryList: Set<String>
-        get() = sp.getStringSet(KEY.IPTV_SOURCE_URL_HISTORY_LIST.name, emptySet()) ?: emptySet()
+        get() = (sp.getStringSet(KEY.IPTV_SOURCE_URL_HISTORY_LIST.name, emptySet()) ?: emptySet()).toSet()
         set(value) = sp.edit().putStringSet(KEY.IPTV_SOURCE_URL_HISTORY_LIST.name, value).apply()
 
     /** 是否启用数字选台 */
@@ -203,7 +203,7 @@ object SP {
 
     /** 直播源频道收藏列表 */
     var iptvChannelFavoriteList: Set<String>
-        get() = sp.getStringSet(KEY.IPTV_CHANNEL_FAVORITE_LIST.name, emptySet()) ?: emptySet()
+        get() = (sp.getStringSet(KEY.IPTV_CHANNEL_FAVORITE_LIST.name, emptySet()) ?: emptySet()).toSet()
         set(value) = sp.edit().putStringSet(KEY.IPTV_CHANNEL_FAVORITE_LIST.name, value).apply()
 
     /** ==================== 节目单 ==================== */
@@ -224,7 +224,7 @@ object SP {
 
     /** 节目单历史列表 */
     var epgXmlUrlHistoryList: Set<String>
-        get() = sp.getStringSet(KEY.EPG_XML_URL_HISTORY_LIST.name, emptySet()) ?: emptySet()
+        get() = (sp.getStringSet(KEY.EPG_XML_URL_HISTORY_LIST.name, emptySet()) ?: emptySet()).toSet()
         set(value) = sp.edit().putStringSet(KEY.EPG_XML_URL_HISTORY_LIST.name, value).apply()
 
     /** 启用节目单回放 */

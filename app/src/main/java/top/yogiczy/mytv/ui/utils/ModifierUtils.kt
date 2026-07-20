@@ -35,8 +35,11 @@ fun Modifier.handleLeanbackKeyEvents(
             }
 
             KeyEvent.ACTION_UP -> {
+                val wasPressed = keyDownMap.containsKey(it.nativeKeyEvent.keyCode)
                 val wasShortPress = keyDownMap.remove(it.nativeKeyEvent.keyCode) == true
-                onKeyPressEnd[it.nativeKeyEvent.keyCode]?.invoke()
+                // 焦点在 DOWN 与 UP 之间移走时，UP 会落到没记录过 DOWN 的实例上，
+                // 只对确实按下过的键回调 pressEnd，避免虚假事件
+                if (wasPressed) onKeyPressEnd[it.nativeKeyEvent.keyCode]?.invoke()
                 if (wasShortPress) {
                     onKeyTap[it.nativeKeyEvent.keyCode]?.invoke()
                 }
@@ -64,6 +67,11 @@ fun Modifier.handleLeanbackDragGestures(
 
     return this then pointerInput(Unit) {
         detectVerticalDragGestures(
+            // 每次手势开始重置位移与速度采样，避免上一次手势的残留污染本次判定
+            onDragStart = {
+                verticalDragOffset = 0f
+                verticalTracker.resetTracking()
+            },
             onDragEnd = {
                 if (verticalDragOffset.absoluteValue > distanceThreshold.toPx()) {
                     if (verticalTracker.calculateVelocity().y > speedThreshold.toPx()) {
@@ -79,6 +87,10 @@ fun Modifier.handleLeanbackDragGestures(
         }
     }.pointerInput(Unit) {
         detectHorizontalDragGestures(
+            onDragStart = {
+                horizontalDragOffset = 0f
+                horizontalTracker.resetTracking()
+            },
             onDragEnd = {
                 if (horizontalDragOffset.absoluteValue > distanceThreshold.toPx()) {
                     if (horizontalTracker.calculateVelocity().x > speedThreshold.toPx()) {
@@ -177,8 +189,9 @@ fun Modifier.handleLeanbackKeyEvents(
             }
 
             KeyEvent.ACTION_UP -> {
+                val wasPressed = keyDownMap.containsKey(keyCode)
                 val wasShortPress = keyDownMap.remove(keyCode) == true
-                handlePressEnd(keyCode)
+                if (wasPressed) handlePressEnd(keyCode)
                 if (wasShortPress) handleTap(keyCode)
             }
         }

@@ -109,7 +109,7 @@ fun LeanbackMainContent(
     )
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
-            val channelNo = it.toInt() - 1
+            val channelNo = it.toIntOrNull()?.let { no -> no - 1 } ?: -1
 
             if (channelNo in iptvGroupList.iptvList.indices) {
                 mainContentState.changeCurrentIptv(iptvGroupList.iptvList[channelNo])

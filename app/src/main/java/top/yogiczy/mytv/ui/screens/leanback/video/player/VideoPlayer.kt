@@ -24,6 +24,10 @@ abstract class LeanbackVideoPlayer(
     }
 
     open fun release() {
+        loadTimeoutJob?.cancel()
+        loadTimeoutJob = null
+        cutoffTimeoutJob?.cancel()
+        cutoffTimeoutJob = null
         clearAllListeners()
     }
 
@@ -67,7 +71,10 @@ abstract class LeanbackVideoPlayer(
 
     protected fun triggerError(error: PlaybackException?) {
         onErrorListeners.forEach { it(error) }
-        if(error != PlaybackException.LOAD_TIMEOUT) {
+        // 只有真正的错误才取消加载超时；
+        // BUFFERING 时的 triggerError(null) 只是清错误状态，不能取消，
+        // 否则超时任务在启动后就被立即取消，LOAD_TIMEOUT 永远不触发
+        if (error != null && error != PlaybackException.LOAD_TIMEOUT) {
             loadTimeoutJob?.cancel()
             loadTimeoutJob = null
         }
@@ -83,7 +90,7 @@ abstract class LeanbackVideoPlayer(
     }
 
     protected fun triggerPrepared() {
-        onPreparedListeners.forEach { it() }
+        notifyPrepared()
         loadTimeoutJob?.cancel()
         loadTimeoutJob = coroutineScope.launch {
             delay(SP.videoPlayerLoadTimeout)
@@ -91,6 +98,14 @@ abstract class LeanbackVideoPlayer(
         }
         cutoffTimeoutJob?.cancel()
         cutoffTimeoutJob = null
+    }
+
+    /**
+     * 仅通知 prepared 事件，不启动加载超时任务。
+     * 供组合播放器转发子播放器事件时使用，避免两层各武装一个超时。
+     */
+    protected fun notifyPrepared() {
+        onPreparedListeners.forEach { it() }
     }
 
     protected fun triggerMetadata(metadata: Metadata) {

@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.foundation.lazy.list.TvLazyColumn
-import androidx.tv.foundation.lazy.list.TvLazyListState
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.foundation.lazy.list.items
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -191,7 +191,7 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                 var hasFocused by remember { mutableStateOf(false) }
 
                 TvLazyColumn(
-                    state = TvLazyListState(
+                    state = rememberTvLazyListState(
                         max(0, iptvSourceHistory.indexOf(currentIptvSource) - 2),
                     ),
                     contentPadding = PaddingValues(vertical = 4.dp),

@@ -26,13 +26,18 @@ class LeanbackToastState(private val coroutineScope: CoroutineScope) {
     private var _current by mutableStateOf(LeanbackToastProperty())
     val current get() = _current
 
+    // 递增序号解决并发乱序：延迟期间若有更新的 toast，旧 toast 不再覆盖
+    private val toastSeq = java.util.concurrent.atomic.AtomicLong(0)
+
     private fun showToast(toast: LeanbackToastProperty) {
+        val seq = toastSeq.incrementAndGet()
         coroutineScope.launch {
             if (_visible && _current.id != toast.id) {
                 _visible = false
                 delay(300)
             }
 
+            if (seq != toastSeq.get()) return@launch
             _current = toast
             _visible = true
             channel.trySend(toast.duration.toMs())

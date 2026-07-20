@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -104,6 +105,7 @@ class LeanbackVideoPlayerState(
     fun release() {
         onReadyListeners.clear()
         onErrorListeners.clear()
+        onCutoffListeners.clear()
         instance.release()
     }
 }
@@ -115,10 +117,12 @@ fun rememberLeanbackVideoPlayerState(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
+    // 设置项变化后 provider 会重建，用 rememberUpdatedState 保证 state 内始终读最新值
+    val latestAspectRatioProvider by rememberUpdatedState(defaultAspectRatioProvider)
     val state = remember {
         LeanbackVideoPlayerState(
             LeanbackCompositeVideoPlayer(context, coroutineScope),
-            defaultAspectRatioProvider = defaultAspectRatioProvider,
+            defaultAspectRatioProvider = { latestAspectRatioProvider() },
         )
     }
 

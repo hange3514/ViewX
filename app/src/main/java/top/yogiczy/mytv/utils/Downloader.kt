@@ -31,8 +31,11 @@ object Downloader : Loggable() {
                         throw Exception("下载文件失败: $code")
                     }
 
+                    // 流式写盘，避免大文件（如 85MB 更新包）一次性读入内存导致 OOM
                     val file = File(filePath)
-                    FileOutputStream(file).use { fos -> fos.write(body!!.bytes()) }
+                    FileOutputStream(file).use { fos ->
+                        body!!.byteStream().use { it.copyTo(fos) }
+                    }
                 }
             } catch (ex: Exception) {
                 log.e("下载文件失败", ex)
@@ -55,9 +58,13 @@ object Downloader : Loggable() {
                 override fun read(sink: okio.Buffer, byteCount: Long): Long {
                     val bytesRead = super.read(sink, byteCount)
                     totalBytesRead += if (bytesRead != -1L) bytesRead else 0
-                    val progress = (totalBytesRead * 100 / contentLength()).toInt()
-                    CoroutineScope(Dispatchers.IO).launch {
-                        onProgressCb?.invoke(progress)
+                    // contentLength 为 -1（chunked 响应）时无法计算进度
+                    val length = contentLength()
+                    if (length > 0) {
+                        val progress = (totalBytesRead * 100 / length).toInt()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            onProgressCb?.invoke(progress)
+                        }
                     }
                     return bytesRead
                 }

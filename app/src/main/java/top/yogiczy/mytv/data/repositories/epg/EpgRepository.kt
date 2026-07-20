@@ -14,7 +14,6 @@ import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.repositories.FileCacheRepository
 import top.yogiczy.mytv.data.utils.ChannelNameNormalizer
-import top.yogiczy.mytv.data.utils.matchesChannel
 import top.yogiczy.mytv.data.repositories.epg.fetcher.EpgFetcher
 import top.yogiczy.mytv.utils.Logger
 import java.io.StringReader
@@ -59,7 +58,7 @@ class EpgRepository : FileCacheRepository("epg.json") {
             SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("GMT+8")
             },
-        )
+        ).onEach { it.isLenient = false }
         fun parseTime(time: String?): Long {
             val t = time?.trim() ?: return 0
             if (t.length < 14) return 0
@@ -72,6 +71,20 @@ class EpgRepository : FileCacheRepository("epg.json") {
             }
             log.w("无法解析节目时间: $t")
             return 0
+        }
+
+        /**
+         * 跳过未知标签的整个子树。
+         * 不能用 nextText()：遇到嵌套标签（如 credits/rating）会直接抛异常导致整个节目单解析失败
+         */
+        fun skipSubTree() {
+            var depth = 1
+            while (depth > 0) {
+                when (parser.next()) {
+                    XmlPullParser.START_TAG -> depth++
+                    XmlPullParser.END_TAG -> depth--
+                }
+            }
         }
 
         var eventType = parser.eventType
@@ -89,15 +102,18 @@ class EpgRepository : FileCacheRepository("epg.json") {
                             if (inner == XmlPullParser.START_TAG && parser.name == "display-name") {
                                 channelName = parser.nextText()
                             } else if (inner == XmlPullParser.START_TAG) {
-                                parser.nextText()
+                                skipSubTree()
                             }
                             inner = parser.nextToken()
                         }
 
+                        val normalizedChannelName = ChannelNameNormalizer.normalize(channelName)
                         val shouldInclude = filteredChannels.isEmpty()
-                                || filterIdSet.contains(channelId)
-                                || filterNormalized.contains(ChannelNameNormalizer.normalize(channelName))
-                                || filteredChannels.any { it.matchesChannel(channelName) }
+                                || filterIdSet.contains(normalizedChannelId)
+                                || filterNormalized.contains(normalizedChannelName)
+                                || filterNormalized.any {
+                                    ChannelNameNormalizer.matchesNormalized(it, normalizedChannelName)
+                                }
 
                         if (shouldInclude) {
                             includedChannelCount++
@@ -116,7 +132,7 @@ class EpgRepository : FileCacheRepository("epg.json") {
                             if (inner == XmlPullParser.START_TAG && parser.name == "title") {
                                 title = parser.nextText()
                             } else if (inner == XmlPullParser.START_TAG) {
-                                parser.nextText()
+                                skipSubTree()
                             }
                             inner = parser.nextToken()
                         }
@@ -125,7 +141,9 @@ class EpgRepository : FileCacheRepository("epg.json") {
                         val endAt = parseTime(stopTime)
                         if (startAt == 0L || endAt == 0L) parseTimeFailureCount++
 
-                        programmesMap[normalizedChannelId]?.add(
+                        // xmltv 未规定 channel 必须先于 programme 出现，用 getOrPut 避免乱序时丢节目；
+                        // 未通过过滤的频道在最终结果中本就不会出现
+                        programmesMap.getOrPut(normalizedChannelId) { mutableListOf() }.add(
                             EpgProgramme(
                                 startAt = startAt,
                                 endAt = endAt,
