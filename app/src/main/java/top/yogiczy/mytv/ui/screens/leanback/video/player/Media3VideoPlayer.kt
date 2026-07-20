@@ -148,6 +148,10 @@ class LeanbackMedia3VideoPlayer(
                         }
                     }
                 }
+            } else if (playbackState == Player.STATE_ENDED) {
+                // 流播完（回放片段到末尾）立即触发断流回调，
+                // 由上层决定接续下一片段或恢复直播，不必等卡死超时
+                triggerCutoff()
             }
 
             if (playbackState != Player.STATE_BUFFERING) {

@@ -14,9 +14,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import top.yogiczy.mytv.data.entities.EpgList
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvGroupList
+import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvGroupOf
 import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvIdx
 import top.yogiczy.mytv.data.utils.CatchupUrlBuilder
@@ -33,6 +35,7 @@ class LeanbackMainContentState(
     private val coroutineScope: CoroutineScope,
     private val videoPlayerState: LeanbackVideoPlayerState,
     private val iptvGroupList: IptvGroupList,
+    private val epgListProvider: () -> EpgList,
 ) : Loggable() {
     private var _currentIptv by mutableStateOf(Iptv())
     val currentIptv get() = _currentIptv
@@ -112,7 +115,22 @@ class LeanbackMainContentState(
         }
 
         videoPlayerState.onCutoff {
-            changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
+            if (_isReplayMode && _replayProgramme != null) {
+                val programme = _replayProgramme!!
+                val now = System.currentTimeMillis()
+                val positionMs = _replayCurrentPositionMs + (now - _replayPositionBaseTime)
+                val totalDuration = _replayCatchupEndAt - programme.startAt
+                if (positionMs >= totalDuration - REPLAY_END_ADVANCE_THRESHOLD_MS) {
+                    // 当前回放片段播完，按时间顺序接续下一片段
+                    playNextProgrammeOrExit()
+                } else {
+                    // 未播完却被判定断流，按当前位置重试
+                    log.d("回放断流，按当前位置重试: ${programme.title}")
+                    seekToProgramme(programme, positionMs.coerceIn(0, max(0, totalDuration)))
+                }
+            } else {
+                changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
+            }
         }
 
         // TODO(测试)：启动 10s 后自动进入回放模式，用于验证 seek URL 生成
@@ -276,6 +294,8 @@ class LeanbackMainContentState(
      *
      * 大多数 IPTV 回放源通过改变 `playseek` 时间窗口来定位，播放器自身的 seek 往往无效。
      * 这里根据当前播放位置重新构造 catchup URL，让服务器返回从目标时间开始的片段。
+     * 支持跨片段：快退越过本片段开头时进入上一片段末尾继续，
+     * 快进越过本片段末尾时进入下一片段开头继续。
      */
     fun seekReplay(offsetMs: Long) {
         if (!_isReplayMode || _replayProgramme == null) return
@@ -287,20 +307,87 @@ class LeanbackMainContentState(
         val now = System.currentTimeMillis()
         // 播放器对这种流通常不报告进度，基于本地维护的位置估算
         val currentMs = _replayCurrentPositionMs + (now - _replayPositionBaseTime)
-        val targetMs = (currentMs + offsetMs).coerceIn(0, totalDuration)
+        val targetMs = currentMs + offsetMs
 
+        when {
+            targetMs < 0 -> {
+                // 快退越过本片段开头 → 进入上一片段末尾继续快退
+                val prev = getSiblingProgramme(-1)
+                if (prev == null) {
+                    seekToProgramme(programme, 0)
+                } else {
+                    val prevDuration = max(0, minOf(prev.endAt, now) - prev.startAt)
+                    seekToProgramme(prev, (prevDuration + targetMs).coerceIn(0, prevDuration))
+                }
+            }
+
+            targetMs > totalDuration -> {
+                // 快进越过本片段末尾 → 进入下一片段开头继续快进
+                val next = getSiblingProgramme(1)
+                if (next == null || next.startAt > now) {
+                    // 没有更多已播出的片段，最多快进到本片段末尾
+                    seekToProgramme(programme, totalDuration)
+                } else {
+                    val nextDuration = max(0, minOf(next.endAt, now) - next.startAt)
+                    seekToProgramme(next, (targetMs - totalDuration).coerceIn(0, nextDuration))
+                }
+            }
+
+            else -> seekToProgramme(programme, targetMs)
+        }
+    }
+
+    /**
+     * 当前回放片段播完后，按时间顺序接续播放下一片段；没有更多片段时回到直播
+     */
+    private fun playNextProgrammeOrExit() {
+        val now = System.currentTimeMillis()
+        val next = getSiblingProgramme(1)
+        if (next == null || next.startAt > now) {
+            exitReplayMode()
+        } else {
+            log.d("回放片段结束，接续下一片段: ${next.title}")
+            playCatchup(_currentIptv, next)
+        }
+    }
+
+    /**
+     * 当前频道的节目单（按开始时间升序）
+     */
+    private fun getReplayProgrammes(): List<EpgProgramme> =
+        epgListProvider().findByIptv(_currentIptv)?.programmes ?: emptyList()
+
+    /**
+     * 当前回放片段的上一个（direction=-1）或下一个（direction=1）片段
+     */
+    private fun getSiblingProgramme(direction: Int): EpgProgramme? {
+        val programme = _replayProgramme ?: return null
+        val programmes = getReplayProgrammes()
+        val index = programmes.indexOfFirst { it.startAt == programme.startAt }
+        if (index < 0) return null
+        return programmes.getOrNull(index + direction)
+    }
+
+    /**
+     * 跳转到指定片段的指定位置（距片段开头 targetMs 毫秒）
+     */
+    private fun seekToProgramme(programme: EpgProgramme, targetMs: Long) {
+        val now = System.currentTimeMillis()
+        val catchupEndAt = minOf(programme.endAt, now)
         val newStartAt = programme.startAt + targetMs
         val catchupUrl = CatchupUrlBuilder.build(
             _currentIptv.catchupSource,
             newStartAt,
-            _replayCatchupEndAt,
+            catchupEndAt,
         )
         if (catchupUrl.isBlank()) return
 
+        _replayProgramme = programme
+        _replayCatchupEndAt = catchupEndAt
         _replayCurrentPositionMs = targetMs
         _replayPositionBaseTime = now
 
-        log.d("回放seek: ${programme.title}, offset=${offsetMs}ms, target=$targetMs, url=$catchupUrl")
+        log.d("回放seek: ${programme.title}, target=${targetMs}ms, url=$catchupUrl")
         videoPlayerState.prepare(catchupUrl)
     }
 
@@ -311,11 +398,13 @@ fun rememberLeanbackMainContentState(
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
     videoPlayerState: LeanbackVideoPlayerState = rememberLeanbackVideoPlayerState(),
     iptvGroupList: IptvGroupList = IptvGroupList(),
+    epgListProvider: () -> EpgList = { EpgList() },
 ) = remember {
     LeanbackMainContentState(
         coroutineScope = coroutineScope,
         videoPlayerState = videoPlayerState,
         iptvGroupList = iptvGroupList,
+        epgListProvider = epgListProvider,
     )
 }
 
@@ -325,3 +414,6 @@ private fun getUrlHost(url: String): String {
 
 /** 换台去抖窗口：该时间内的重复换台触发会被忽略 */
 private const val CHANNEL_FLIP_DEBOUNCE_MS = 300L
+
+/** 回放片段距末尾不足该时长时，断流回调视为"片段播完"而接续下一片段 */
+private const val REPLAY_END_ADVANCE_THRESHOLD_MS = 30_000L

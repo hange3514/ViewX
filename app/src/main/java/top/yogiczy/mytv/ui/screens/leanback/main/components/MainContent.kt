@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -99,9 +100,12 @@ fun LeanbackMainContent(
     val videoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
     )
+    // EPG 是异步加载的，用 rememberUpdatedState 保证 state 内读取到的始终是最新节目单
+    val latestEpgList by rememberUpdatedState(epgList)
     val mainContentState = rememberLeanbackMainContentState(
         videoPlayerState = videoPlayerState,
         iptvGroupList = iptvGroupList,
+        epgListProvider = { latestEpgList },
     )
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
