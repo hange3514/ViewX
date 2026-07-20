@@ -135,11 +135,15 @@ object HttpServer : Loggable() {
         if (SP.iptvSourceUrl != iptvSourceUrl) {
             SP.iptvSourceUrl = iptvSourceUrl
             IptvRepository().clearCache()
+            showToast("直播源已更新，正在刷新...")
+            LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
         }
 
         if (SP.epgXmlUrl != epgXmlUrl) {
             SP.epgXmlUrl = epgXmlUrl
             EpgRepository().clearCache()
+            showToast("节目单地址已更新，正在刷新...")
+            LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
         }
 
         SP.videoPlayerUserAgent = videoPlayerUserAgent
@@ -194,9 +198,11 @@ object HttpServer : Loggable() {
                 val caps = cm.getNetworkCapabilities(network) ?: continue
                 val linkProps = cm.getLinkProperties(network) ?: continue
 
+                // VPN（如 V2RAYN）会创建虚拟网卡，其地址对局域网访问毫无意义，直接排除
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+
                 val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
                 val isEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                val isVpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
                 val isCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
 
                 for (linkAddr in linkProps.linkAddresses) {
@@ -208,7 +214,6 @@ object HttpServer : Loggable() {
                     when {
                         isWifi -> score += 5
                         isEthernet -> score += 4
-                        isVpn -> score -= 5
                         isCellular -> score -= 10
                     }
                     candidates.add(address to score)
@@ -230,14 +235,22 @@ object HttpServer : Loggable() {
                     ?: return defaultIp
                 val activeNetwork = cm.activeNetwork ?: return defaultIp
                 val linkProps = cm.getLinkProperties(activeNetwork) ?: return defaultIp
-                for (linkAddr in linkProps.linkAddresses) {
-                    val address = linkAddr.address ?: continue
-                    if (address is Inet4Address && !address.isLoopbackAddress) {
-                        address.hostAddress?.let {
+
+                // VPN 开启后默认网络往往是虚拟网卡（tun/ppp），跳过走网卡枚举兜底
+                val ifName = linkProps.interfaceName?.lowercase() ?: ""
+                val isVpnLike = ifName.contains("tun") || ifName.contains("ppp") || ifName.contains("vpn")
+
+                if (!isVpnLike) {
+                    // 优先 site-local（局域网）地址
+                    val addresses = linkProps.linkAddresses
+                        .mapNotNull { it.address }
+                        .filterIsInstance<Inet4Address>()
+                        .filter { !it.isLoopbackAddress }
+                    (addresses.firstOrNull { it.isSiteLocalAddress } ?: addresses.firstOrNull())
+                        ?.hostAddress?.let {
                             log.d("IP from active network: $it")
                             return it
                         }
-                    }
                 }
             } catch (ex: Exception) {
                 log.e("Active network IP detection failed", ex)

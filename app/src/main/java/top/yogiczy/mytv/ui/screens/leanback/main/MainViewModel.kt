@@ -18,6 +18,7 @@ import top.yogiczy.mytv.data.entities.IptvGroupList
 import top.yogiczy.mytv.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.data.utils.Constants
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
 
 class LeanbackMainViewModel : ViewModel() {
@@ -31,6 +32,15 @@ class LeanbackMainViewModel : ViewModel() {
         viewModelScope.launch {
             refreshIptv()
             refreshEpg()
+        }
+
+        // 网页端推送新的节目单地址后实时刷新，无需重启应用
+        viewModelScope.launch {
+            LiveSettingsBus.epgRefreshRequests.collect {
+                if (_uiState.value is LeanbackMainUiState.Ready) {
+                    refreshEpg()
+                }
+            }
         }
     }
 

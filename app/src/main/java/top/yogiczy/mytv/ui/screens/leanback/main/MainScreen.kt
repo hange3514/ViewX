@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.ui.screens.leanback.main
 
+import android.app.Activity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +42,7 @@ import top.yogiczy.mytv.ui.screens.leanback.main.components.LeanbackMainContent
 import top.yogiczy.mytv.ui.screens.leanback.settings.LeanbackSettingsScreen
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 
 @Composable
@@ -49,6 +52,14 @@ fun LeanbackMainScreen(
     mainViewModel: LeanbackMainViewModel = viewModel(),
 ) {
     val uiState by mainViewModel.uiState.collectAsState()
+
+    // 网页端推送新的直播源地址后，重建界面使新源实时生效（软重启，无需手动退出应用）
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        LiveSettingsBus.recreateAppRequests.collect {
+            (context as? Activity)?.recreate()
+        }
+    }
 
     when (val s = uiState) {
         is LeanbackMainUiState.Ready -> LeanbackMainContent(
