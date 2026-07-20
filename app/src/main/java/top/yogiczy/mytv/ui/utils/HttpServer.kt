@@ -193,7 +193,9 @@ object HttpServer : Loggable() {
                     os.flush()
                     showToast("文件接收完成")
                     body.dataEmitter.close()
-                    ApkInstaller.installApk(context, uploadedApkFile.path)
+                    if (!ApkInstaller.installApk(context, uploadedApkFile.path)) {
+                        showToast("无法调起安装界面，请通过U盘手动安装")
+                    }
                 } finally {
                     try {
                         os.close()

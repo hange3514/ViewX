@@ -10,9 +10,11 @@ import java.io.File
 
 object ApkInstaller {
     @SuppressLint("SetWorldReadable")
-    fun installApk(context: Context, filePath: String) {
+    fun installApk(context: Context, filePath: String): Boolean {
         val file = File(filePath)
-        if (file.exists()) {
+        if (!file.exists()) return false
+
+        return try {
             val cacheDir = context.cacheDir
             val cachedApkFile = File(cacheDir, file.name)
 
@@ -38,6 +40,11 @@ object ApkInstaller {
             }
 
             context.startActivity(installIntent)
+            true
+        } catch (ex: Exception) {
+            // 部分电视 ROM 缺少安装器或 FileProvider 配置不兼容，不能让应用崩溃
+            ex.printStackTrace()
+            false
         }
     }
 }

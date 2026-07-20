@@ -58,7 +58,9 @@ fun LeanbackUpdateScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (context.packageManager.canRequestPackageInstalls()) {
-                    ApkInstaller.installApk(context, latestFile.path)
+                    if (!ApkInstaller.installApk(context, latestFile.path)) {
+                        LeanbackToastState.I.showToast("无法调起安装界面，请通过U盘手动安装")
+                    }
                 } else {
                     LeanbackToastState.I.showToast("未授予安装权限")
                 }
@@ -68,14 +70,42 @@ fun LeanbackUpdateScreen(
     LaunchedEffect(updateViewModel.updateDownloaded) {
         if (!updateViewModel.updateDownloaded) return@LaunchedEffect
 
+        fun tryInstall() {
+            if (!ApkInstaller.installApk(context, latestFile.path)) {
+                LeanbackToastState.I.showToast("无法调起安装界面，请通过U盘手动安装")
+            }
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            ApkInstaller.installApk(context, latestFile.path)
+            tryInstall()
         } else {
             if (context.packageManager.canRequestPackageInstalls()) {
-                ApkInstaller.installApk(context, latestFile.path)
+                tryInstall()
             } else {
-                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                launcher.launch(intent)
+                // 部分电视 ROM（如小米 MIUI TV）没有"未知来源"设置页，
+                // 直接 launch 会 ActivityNotFoundException 闪退，逐级回退
+                val intents = listOf(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                    },
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES),
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                    },
+                )
+                var launched = false
+                for (intent in intents) {
+                    try {
+                        launcher.launch(intent)
+                        launched = true
+                        break
+                    } catch (ex: android.content.ActivityNotFoundException) {
+                        // 尝试下一个
+                    }
+                }
+                if (!launched) {
+                    LeanbackToastState.I.showToast("请在系统设置中允许本应用安装应用后重试")
+                }
             }
         }
     }
