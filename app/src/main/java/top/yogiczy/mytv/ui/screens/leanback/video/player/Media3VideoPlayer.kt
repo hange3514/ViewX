@@ -42,10 +42,10 @@ class LeanbackMedia3VideoPlayer(
     ).setLoadControl(
         DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                1000, // 缓冲 1 秒就开始播放
-                2000, // rebuffer 后 2 秒继续播放
+                60_000, // 最小缓冲 60 秒，网络抖动时更耐播
+                120_000, // 最大缓冲 120 秒，回放/时移流可多缓存内容
+                2000, // 缓冲 2 秒就开始播放
+                3000, // rebuffer 后 3 秒继续播放
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
