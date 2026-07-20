@@ -58,12 +58,23 @@ class LeanBackUpdateViewModel : ViewModel() {
         )
 
         try {
-            Downloader.downloadTo(_latestRelease.downloadUrl, latestFile.path) {
+            val onProgress: (Int) -> Unit = {
                 LeanbackToastState.I.showToast(
                     "正在下载更新: $it%",
                     LeanbackToastProperty.Duration.Custom(10_000),
                     "downloadProcess"
                 )
+            }
+
+            try {
+                Downloader.downloadTo(_latestRelease.downloadUrl, latestFile.path, onProgress)
+            } catch (ex: Exception) {
+                // 加速代理失效时，回退到 GitHub 直连地址重试
+                val directUrl = _latestRelease.downloadUrl.removePrefix(Constants.GITHUB_PROXY)
+                if (directUrl == _latestRelease.downloadUrl) throw ex
+                log.d("代理下载失败，回退直连: $directUrl")
+                LeanbackToastState.I.showToast("代理下载失败，尝试直连下载")
+                Downloader.downloadTo(directUrl, latestFile.path, onProgress)
             }
 
             _updateDownloaded = true

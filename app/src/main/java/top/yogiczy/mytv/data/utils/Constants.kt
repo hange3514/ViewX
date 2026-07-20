@@ -43,8 +43,9 @@ object Constants {
 
     /**
      * GitHub加速代理地址
+     * 注意：这类公益代理稳定性差，失效时下载逻辑会回退到 GitHub 直连
      */
-    const val GITHUB_PROXY = "https://mirror.ghproxy.com/"
+    const val GITHUB_PROXY = "https://ghfast.top/"
 
     /**
      * HTTP请求重试次数
