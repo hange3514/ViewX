@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
 本地代理：把 192.168.0.110:8088/iptv.m3u8 和 xmltv.xml 暴露给模拟器，
-并把 192.168.0.110:7088/rtp/* 直播流转发到本机 7088，
+并把 192.168.0.110:8089/rtp/* 直播流转发到本机 7088，
 让 Android 模拟器通过 adb reverse 访问。
+注意：上游直播流端口是 8089，不是 7088/7878。
 """
 import http.server
 import socketserver
 import threading
 import urllib.request
 import urllib.parse
+import re
 import sys
 
 IPTV_HOST = "192.168.0.110"
 M3U_PORT = 8088
-STREAM_PORT = 7088
+STREAM_UPSTREAM_PORT = 8089  # 上游 rtp 代理端口
+STREAM_LISTEN_PORT = 7088    # 本机监听端口，模拟器通过 adb reverse 访问
 
 
 def _proxy_headers(upstream_resp, downstream_handler, extra=None):
@@ -30,7 +33,7 @@ def _stream(upstream_url, handler):
     req = urllib.request.Request(
         upstream_url,
         headers={
-            "Host": f"{IPTV_HOST}:{STREAM_PORT}",
+            "Host": f"{IPTV_HOST}:{STREAM_UPSTREAM_PORT}",
             "User-Agent": "ExoPlayer",
             "Accept": "*/*",
         },
@@ -63,16 +66,17 @@ class M3uHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        if path == "/iptv.m3u8":
+        if path in ("/iptv.m3u8", "/iptv_local.m3u8"):
             try:
-                url = f"http://{IPTV_HOST}:{M3U_PORT}/iptv.m3u8"
+                url = f"http://{IPTV_HOST}:{M3U_PORT}{path}"
                 req = urllib.request.Request(url, headers={"Host": f"{IPTV_HOST}:{M3U_PORT}"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     body = resp.read().decode("utf-8", errors="replace")
                     # 让模拟器请求本机 7088，通过 adb reverse 转到宿主机的 stream 代理
-                    body = body.replace(
-                        f"http://{IPTV_HOST}:{STREAM_PORT}/",
-                        f"http://127.0.0.1:{STREAM_PORT}/",
+                    body = re.sub(
+                        rf"http://[^/\s:]+:{STREAM_UPSTREAM_PORT}/",
+                        f"http://127.0.0.1:{STREAM_LISTEN_PORT}/",
+                        body,
                     )
                     data = body.encode("utf-8")
                     self.send_response(resp.status)
@@ -114,20 +118,20 @@ class StreamHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        upstream = f"http://{IPTV_HOST}:{STREAM_PORT}{parsed.path}"
+        upstream = f"http://{IPTV_HOST}:{STREAM_UPSTREAM_PORT}{parsed.path}"
         if parsed.query:
             upstream += "?" + parsed.query
         _stream(upstream, self)
 
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
-        upstream = f"http://{IPTV_HOST}:{STREAM_PORT}{parsed.path}"
+        upstream = f"http://{IPTV_HOST}:{STREAM_UPSTREAM_PORT}{parsed.path}"
         if parsed.query:
             upstream += "?" + parsed.query
         req = urllib.request.Request(
             upstream,
             method="HEAD",
-            headers={"Host": f"{IPTV_HOST}:{STREAM_PORT}"},
+            headers={"Host": f"{IPTV_HOST}:{STREAM_UPSTREAM_PORT}"},
         )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -146,13 +150,13 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 def serve():
     m3u = ThreadedHTTPServer(("127.0.0.1", M3U_PORT), M3uHandler)
-    stream = ThreadedHTTPServer(("127.0.0.1", STREAM_PORT), StreamHandler)
+    stream = ThreadedHTTPServer(("127.0.0.1", STREAM_LISTEN_PORT), StreamHandler)
     t1 = threading.Thread(target=m3u.serve_forever, daemon=True)
     t2 = threading.Thread(target=stream.serve_forever, daemon=True)
     t1.start()
     t2.start()
     print(f"Proxy running: 127.0.0.1:{M3U_PORT} -> {IPTV_HOST}:{M3U_PORT}")
-    print(f"Stream proxy:  127.0.0.1:{STREAM_PORT} -> {IPTV_HOST}:{STREAM_PORT}")
+    print(f"Stream proxy:  127.0.0.1:{STREAM_LISTEN_PORT} -> {IPTV_HOST}:{STREAM_UPSTREAM_PORT}")
     try:
         while True:
             threading.Event().wait()

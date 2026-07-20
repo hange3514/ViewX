@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.CardDefaults
+import kotlinx.coroutines.delay
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
@@ -61,7 +62,13 @@ fun LeanbackPanelIptvItem(
     LaunchedEffect(Unit) {
         if (initialFocusedProvider()) {
             onHasFocused()
-            focusRequester.requestFocus()
+            // 部分电视（如长虹）首次弹出面板时布局尚未完成，焦点请求会被静默丢弃，
+            // 导致面板按键无响应；这里重试直至真正获得焦点
+            repeat(20) {
+                if (isFocused) return@LaunchedEffect
+                focusRequester.requestFocus()
+                delay(50)
+            }
         }
     }
 

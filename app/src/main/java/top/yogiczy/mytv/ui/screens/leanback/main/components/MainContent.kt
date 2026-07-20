@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.ui.screens.leanback.main.components
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -10,9 +11,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -60,6 +63,9 @@ private const val REPLAY_SEEK_OFFSET_MS = 30_000L
 private const val REPLAY_SEEK_CONTINUOUS_OFFSET_MS = 10_000L
 private const val REPLAY_SEEK_CONTINUOUS_INITIAL_DELAY_MS = 400L
 private const val REPLAY_SEEK_CONTINUOUS_INTERVAL_MS = 200L
+
+/** 回放模式下双击返回键退出的间隔窗口 */
+private const val REPLAY_EXIT_DOUBLE_BACK_INTERVAL_MS = 2_000L
 
 @Composable
 fun LeanbackMainContent(
@@ -219,12 +225,25 @@ fun LeanbackMainContent(
         { settingsViewModel.iptvChannelNoSelectEnable }
     }
 
+    // 回放模式下双击返回退出：记录第一次按返回的时间
+    var lastReplayExitBackAt by remember { mutableLongStateOf(0L) }
+
     val onBackPressedHandler = remember {
         {
-            if (mainContentState.isReplayMode) mainContentState.exitReplayMode()
-            else if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
+            // 优先关闭浮层，浮层都关闭后才处理退出回放/退出应用
+            if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
             else if (mainContentState.isSettingsVisible) mainContentState.isSettingsVisible = false
             else if (mainContentState.isQuickPanelVisible) mainContentState.isQuickPanelVisible = false
+            else if (mainContentState.isReplayMode) {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastReplayExitBackAt < REPLAY_EXIT_DOUBLE_BACK_INTERVAL_MS) {
+                    lastReplayExitBackAt = 0L
+                    mainContentState.exitReplayMode()
+                } else {
+                    lastReplayExitBackAt = now
+                    LeanbackToastState.I.showToast("再按一次返回键退出回放")
+                }
+            }
             else onBackPressed()
         }
     }

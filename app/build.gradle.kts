@@ -73,7 +73,8 @@ android {
     }
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            // 使用 debug 签名，便于本地直接构建安装；正式发布时再替换为正式签名
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
@@ -100,6 +101,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.rtsp)
+    implementation("org.videolan.android:libvlc-all:4.0.0-eap25")
     // 序列化
     implementation(libs.kotlinx.serialization)
 

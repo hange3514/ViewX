@@ -251,7 +251,11 @@ private fun LeanbackClassicPanelScreenContent(
         val epgListVisibleProvider = remember { { epgListVisible } }
         val epgListInvisibleProvider = remember { { !epgListVisible } }
         val focusedIptvProvider = remember(focusedIptv) { { focusedIptv } }
-        val focusedIptvEpgProvider = remember {
+        // 注意：epgListProvider 必须作为 remember 的 key。
+        // EPG 是异步加载的（Ready 状态先携带空 epgList，加载完成后再 copy 更新），
+        // 若不指定 key，这里会一直持有面板首次组合时的旧 provider（闭包内是空的 epgList），
+        // 导致 EPG 在面板打开期间加载完成后，按右键只隐藏提示条却显示不出节目单
+        val focusedIptvEpgProvider = remember(epgListProvider, focusedIptv) {
             { epgListProvider().findByIptv(focusedIptv) }
         }
         val focusedIptvFocusRequesterProvider =

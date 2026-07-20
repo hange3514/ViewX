@@ -37,6 +37,7 @@ import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyListState
 import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.material3.ListItemDefaults
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgList
@@ -181,7 +182,13 @@ private fun LeanbackClassicPanelIptvItem(
     LaunchedEffect(Unit) {
         if (initialFocusedProvider()) {
             onInitialFocused()
-            focusRequester.requestFocus()
+            // 部分电视（如长虹）首次弹出面板时布局尚未完成，焦点请求会被静默丢弃，
+            // 导致面板按键无响应；这里重试直至真正获得焦点
+            repeat(20) {
+                if (isFocused) return@LaunchedEffect
+                focusRequester.requestFocus()
+                delay(50)
+            }
         }
     }
 

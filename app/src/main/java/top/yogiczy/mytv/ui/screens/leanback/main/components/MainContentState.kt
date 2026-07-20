@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.ui.screens.leanback.main.components
 
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -113,6 +114,22 @@ class LeanbackMainContentState(
         videoPlayerState.onCutoff {
             changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
         }
+
+        // TODO(测试)：启动 10s 后自动进入回放模式，用于验证 seek URL 生成
+        coroutineScope.launch {
+            delay(10_000)
+            if (_currentIptv.catchupSource.isNotBlank()) {
+                val now = System.currentTimeMillis()
+                playCatchup(
+                    _currentIptv,
+                    EpgProgramme(
+                        startAt = now - 3_600_000,
+                        endAt = now,
+                        title = "测试回放",
+                    ),
+                )
+            }
+        }
     }
 
     private fun getPrevIptv(): Iptv {
@@ -162,11 +179,29 @@ class LeanbackMainContentState(
     }
 
     fun changeCurrentIptvToPrev() {
+        if (!shouldFlipChannel()) return
         changeCurrentIptv(getPrevIptv())
     }
 
     fun changeCurrentIptvToNext() {
+        if (!shouldFlipChannel()) return
         changeCurrentIptv(getNextIptv())
+    }
+
+    private var lastChannelFlipAt = 0L
+
+    /**
+     * 换台去抖：部分电视（如长虹）的系统会把一次按键重复派发，
+     * 导致按一次上/下键连跳两个台；极短时间内的重复触发直接忽略
+     */
+    private fun shouldFlipChannel(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastChannelFlipAt < CHANNEL_FLIP_DEBOUNCE_MS) {
+            log.d("换台触发过于频繁，已忽略（疑似设备重复派发按键事件）")
+            return false
+        }
+        lastChannelFlipAt = now
+        return true
     }
 
     /**
@@ -287,3 +322,6 @@ fun rememberLeanbackMainContentState(
 private fun getUrlHost(url: String): String {
     return url.split("://").getOrElse(1) { "" }.split("/").firstOrNull() ?: url
 }
+
+/** 换台去抖窗口：该时间内的重复换台触发会被忽略 */
+private const val CHANNEL_FLIP_DEBOUNCE_MS = 300L

@@ -12,12 +12,12 @@ object Constants {
     /**
      * 应用 代码仓库
      */
-    const val APP_REPO = "https://github.com/yaoxieyoulei/mytv-android"
+    const val APP_REPO = "https://github.com/hange3514/ViewX"
 
     /**
      * IPTV源地址
      */
-    const val IPTV_SOURCE_URL = "http://1.2.3.4/live.m3u"
+    const val IPTV_SOURCE_URL = "http://192.168.0.110:8088/iptv_local.m3u8"
 
     /**
      * IPTV源缓存时间（毫秒）
@@ -36,9 +36,10 @@ object Constants {
 
     /**
      * Git最新版本信息
+     * 发版时在本仓库创建 release（tag 如 v1.4.5）并把 APK 作为第一个附件上传
      */
     const val GIT_RELEASE_LATEST_URL =
-        "https://api.github.com/repos/yaoxieyoulei/mytv-android/releases/latest"
+        "https://api.github.com/repos/hange3514/ViewX/releases/latest"
 
     /**
      * GitHub加速代理地址
@@ -74,6 +75,11 @@ object Constants {
      * 界面 超时未操作自动关闭界面
      */
     const val UI_SCREEN_AUTO_CLOSE_DELAY = 1000L * 15 // 15秒
+
+    /**
+     * 界面 快捷面板超时未操作自动关闭界面
+     */
+    const val UI_QUICK_PANEL_SCREEN_AUTO_CLOSE_DELAY = 1000L * 5 // 5秒
 
     /**
      * 界面 时间显示前后范围
