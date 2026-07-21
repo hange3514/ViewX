@@ -298,6 +298,9 @@ class LeanbackMainContentState(
             newActive.play()
             oldActive.setVolume(0f)
             log.d("命中预缓冲，主备交换（活跃播放器=$_activePlayerIndex）")
+            // 交换来的播放器早已 ready（play 不会再触发 onReady），
+            // 手动补一次，否则左下角信息条永远不会自动隐藏
+            onActiveReady()
         } else {
             activePlayer.prepare(url)
         }
