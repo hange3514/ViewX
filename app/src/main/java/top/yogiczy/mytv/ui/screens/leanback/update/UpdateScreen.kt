@@ -36,7 +36,8 @@ fun LeanbackUpdateScreen(
     val latestFile = remember { File(AppGlobal.cacheDir, "latest.apk") }
 
     LaunchedEffect(Unit) {
-        delay(3000)
+        // 延迟到启动稳定后再检测，避免与启动期的直播源/EPG 加载争抢网络和 CPU
+        delay(30_000)
         updateViewModel.checkUpdate(packageInfo.versionName)
 
         val latestRelease = updateViewModel.latestRelease

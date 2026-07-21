@@ -18,6 +18,7 @@ class LeanBackUpdateViewModel : ViewModel() {
     private val log = Logger.create(javaClass.simpleName)
 
     private var _isChecking = false
+    val isChecking get() = _isChecking
     private var _isUpdating = false
 
     private var _isUpdateAvailable by mutableStateOf(false)
