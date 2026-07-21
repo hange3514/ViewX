@@ -39,6 +39,7 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
 import java.text.SimpleDateFormat
@@ -105,32 +106,35 @@ fun LeanbackPanelIptvEpgDialog(
                                 LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
                                 else MaterialTheme.colorScheme.onBackground
                             ) {
+                                val onSelectAction = {
+                                    if (isReplayable) {
+                                        onPlayCatchup(iptv, programme)
+                                        onDismissRequest()
+                                    } else {
+                                        when {
+                                            iptv.catchupSource.isBlank() ->
+                                                LeanbackToastState.I.showToast("该频道不支持回放")
+
+                                            programme.startAt > CurrentTime.ms.value ->
+                                                LeanbackToastState.I.showToast("节目尚未开始")
+
+                                            else -> focusRequester.requestFocus()
+                                        }
+                                    }
+                                }
+
                                 androidx.tv.material3.ListItem(
                                     modifier = Modifier
                                         .focusRequester(focusRequester)
-                                        .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                        .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                        .tvTouchClickable(onClick = onSelectAction),
                                     colors = ListItemDefaults.colors(
                                         containerColor = Color.Transparent,
                                         focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                                         selectedContainerColor = Color.Transparent,
                                     ),
                                     selected = isLive,
-                                    onClick = {
-                                        if (isReplayable) {
-                                            onPlayCatchup(iptv, programme)
-                                            onDismissRequest()
-                                        } else {
-                                            when {
-                                                iptv.catchupSource.isBlank() ->
-                                                    LeanbackToastState.I.showToast("该频道不支持回放")
-
-                                                programme.startAt > CurrentTime.ms.value ->
-                                                    LeanbackToastState.I.showToast("节目尚未开始")
-
-                                                else -> focusRequester.requestFocus()
-                                            }
-                                        }
-                                    },
+                                    onClick = onSelectAction,
                                     headlineContent = {
                                         Text(
                                             text = programme.title,

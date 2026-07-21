@@ -38,6 +38,7 @@ import top.yogiczy.mytv.data.entities.IptvGroup
 import top.yogiczy.mytv.data.entities.IptvGroupList
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import kotlin.math.max
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -137,7 +138,11 @@ private fun LeanbackClassicPanelIptvGroupItem(
                     if (isFocused) {
                         onFocused(iptvGroup)
                     }
-                },
+                }
+                .tvTouchClickable(onClick = {
+                    onFocused(iptvGroup)
+                    focusRequester.requestFocus()
+                }),
             // 触摸点按直接选中分组并更新频道列表（遥控器靠焦点移动触发）
             onClick = {
                 onFocused(iptvGroup)

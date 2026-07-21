@@ -39,6 +39,7 @@ import okio.IOException
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.utils.isIPv6
 import kotlin.math.max
 import kotlin.system.measureTimeMillis
@@ -120,7 +121,8 @@ private fun LeanbackQuickPanelIptvChannelItem(
     androidx.tv.material3.ListItem(
         modifier = modifier
             .focusRequester(focusRequester)
-            .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+            .tvTouchClickable(onClick = { onSelect() }),
         selected = isSelected,
         onClick = { onSelect() },
         headlineContent = {

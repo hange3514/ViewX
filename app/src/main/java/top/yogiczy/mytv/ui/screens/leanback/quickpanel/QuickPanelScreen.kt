@@ -42,6 +42,7 @@ import top.yogiczy.mytv.ui.screens.leanback.quickpanel.components.LeanbackQuickP
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.handleLeanbackUserAction
 
 @Composable
@@ -158,7 +159,8 @@ private fun LeanbackQuickPanelButton(
             .focusRequester(focusRequester)
             .onFocusChanged {
                 isFocused = it.isFocused || it.hasFocus
-            },
+            }
+            .tvTouchClickable(onClick = { onSelect() }),
     ) {
         androidx.tv.material3.Text(text = titleProvider())
     }

@@ -22,7 +22,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItemDefaults
 import top.yogiczy.mytv.ui.screens.leanback.components.LeanbackQrcodeDialog
 import top.yogiczy.mytv.ui.utils.HttpServer
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
 fun LeanbackSettingsCategoryListItem(
@@ -81,7 +81,14 @@ fun LeanbackSettingsCategoryListItem(
         supportingContent = { supportingContent?.let { androidx.tv.material3.Text(it) } },
         modifier = modifier
             .focusRequester(focusRequester)
-            .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+            .tvTouchClickable(
+                onClick = {
+                    if (onSelected != null) onSelected()
+                    else if (remoteConfig) showServerUrlDialog = true
+                },
+                onLongClick = { onLongSelected() },
+            ),
     )
 
     LeanbackQrcodeDialog(

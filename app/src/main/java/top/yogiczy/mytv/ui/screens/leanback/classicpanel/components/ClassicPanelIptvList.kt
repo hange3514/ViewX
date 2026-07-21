@@ -48,6 +48,7 @@ import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 import kotlin.math.max
 
@@ -208,7 +209,11 @@ private fun LeanbackClassicPanelIptvItem(
                         if (isFocused) {
                             onFocused()
                         }
-                    },
+                    }
+                    .tvTouchClickable(
+                        onClick = { onSelected() },
+                        onLongClick = { onFavoriteToggle() },
+                    ),
                 onClick = { onSelected() },
                 onLongClick = { onFavoriteToggle() },
                 colors = ListItemDefaults.colors(

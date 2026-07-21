@@ -41,6 +41,7 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import kotlin.math.max
 
 @Composable
@@ -190,7 +191,11 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .tvTouchClickable(
+                                    onClick = { onSelected(url) },
+                                    onLongClick = { onDeleted(url) },
+                                ),
                             selected = currentEpgXmlUrl == url,
                             onClick = { onSelected(url) },
                             onLongClick = { onDeleted(url) },
@@ -220,7 +225,8 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .tvTouchClickable(onClick = { showDialog = true }),
                             selected = false,
                             onClick = { showDialog = true },
                             headlineContent = {

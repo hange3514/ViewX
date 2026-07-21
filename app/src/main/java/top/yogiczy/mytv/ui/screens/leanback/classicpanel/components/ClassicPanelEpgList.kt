@@ -49,6 +49,7 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
 import java.text.SimpleDateFormat
@@ -160,6 +161,24 @@ private fun LeanbackClassicPanelEpgItem(
     val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
 
+    val onSelectAction = remember(iptv, programme, isReplayable) {
+        {
+            if (isReplayable) {
+                onPlayCatchup(iptv, programme)
+            } else {
+                when {
+                    iptv.catchupSource.isBlank() ->
+                        LeanbackToastState.I.showToast("该频道不支持回放")
+
+                    programme.startAt > CurrentTime.ms.value ->
+                        LeanbackToastState.I.showToast("节目尚未开始")
+
+                    else -> focusRequester.requestFocus()
+                }
+            }
+        }
+    }
+
     CompositionLocalProvider(
         LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
         else MaterialTheme.colorScheme.onBackground
@@ -170,23 +189,7 @@ private fun LeanbackClassicPanelEpgItem(
                 .onFocusChanged {
                     isFocused = it.isFocused || it.hasFocus
                 }
-                .handleLeanbackKeyEvents(
-                    onSelect = {
-                        if (isReplayable) {
-                            onPlayCatchup(iptv, programme)
-                        } else {
-                            when {
-                                iptv.catchupSource.isBlank() ->
-                                    LeanbackToastState.I.showToast("该频道不支持回放")
-
-                                programme.startAt > CurrentTime.ms.value ->
-                                    LeanbackToastState.I.showToast("节目尚未开始")
-
-                                else -> focusRequester.requestFocus()
-                            }
-                        }
-                    },
-                ),
+                .tvTouchClickable(onClick = onSelectAction),
             colors = ListItemDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                 selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
@@ -194,21 +197,7 @@ private fun LeanbackClassicPanelEpgItem(
                 ),
             ),
             selected = isLive,
-            onClick = {
-                if (isReplayable) {
-                    onPlayCatchup(iptv, programme)
-                } else {
-                    when {
-                        iptv.catchupSource.isBlank() ->
-                            LeanbackToastState.I.showToast("该频道不支持回放")
-
-                        programme.startAt > CurrentTime.ms.value ->
-                            LeanbackToastState.I.showToast("节目尚未开始")
-
-                        else -> focusRequester.requestFocus()
-                    }
-                }
-            },
+            onClick = onSelectAction,
             headlineContent = {
                 Text(
                     text = programme.title,
@@ -266,12 +255,7 @@ private fun LeanbackClassicPanelEpgDayItem(
                 .onFocusChanged {
                     isFocused = it.isFocused || it.hasFocus
                 }
-                .handleLeanbackKeyEvents(
-                    onSelect = {
-                        if (isFocused) onChangeCurrentDay()
-                        else focusRequester.requestFocus()
-                    }
-                ),
+                .tvTouchClickable(onClick = { onChangeCurrentDay() }),
             colors = ListItemDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                 selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
@@ -279,7 +263,7 @@ private fun LeanbackClassicPanelEpgDayItem(
                 ),
             ),
             selected = isSelected,
-            onClick = {},
+            onClick = { onChangeCurrentDay() },
             headlineContent = {
                 Column {
                     val key = day.split(" ")

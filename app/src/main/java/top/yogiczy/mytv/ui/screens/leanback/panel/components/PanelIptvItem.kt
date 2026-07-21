@@ -37,6 +37,7 @@ import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 
 @Composable
@@ -83,6 +84,10 @@ fun LeanbackPanelIptvItem(
                 isFocused = it.isFocused || it.hasFocus
                 if (isFocused) onFocused()
             }
+            .tvTouchClickable(
+                onClick = { onIptvSelected() },
+                onLongClick = { onIptvFavoriteToggle() },
+            )
             .handleLeanbackKeyEvents(
                 // 菜单键查看节目单仍走按键处理（tv 组件没有对应回调）
                 onSettings = {

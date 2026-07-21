@@ -41,6 +41,7 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.utils.humanizeMs
 import kotlin.math.max
 
@@ -245,7 +246,11 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .tvTouchClickable(
+                                    onClick = { onSelected(source) },
+                                    onLongClick = { onDeleted(source) },
+                                ),
                             selected = currentIptvSource == source,
                             onClick = { onSelected(source) },
                             onLongClick = { onDeleted(source) },
@@ -275,7 +280,8 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .tvTouchClickable(onClick = { showDialog = true }),
                             selected = false,
                             onClick = { showDialog = true },
                             headlineContent = {
@@ -375,7 +381,14 @@ private fun LeanbackSettingsIptvGroupVisibleDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .tvTouchClickable(onClick = {
+                                    changed = true
+                                    val current = SP.iptvSourceHiddenGroupList
+                                    settingsViewModel.iptvSourceHiddenGroupList =
+                                        if (groupName in current) current - groupName
+                                        else current + groupName
+                                }),
                             selected = false,
                             // 触摸/遥控器统一点按切换；直接从 SP 读写避免捕获过期集合
                             onClick = {

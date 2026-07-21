@@ -26,7 +26,7 @@ import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.itemsIndexed
 import top.yogiczy.mytv.ui.screens.leanback.settings.LeanbackSettingsCategories
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -92,7 +92,12 @@ private fun LeanbackSettingsCategoryItem(
                 if (isFocused) {
                     onFocused()
                 }
-            },
+            }
+            .tvTouchClickable(onClick = {
+                onFocused()
+                if (isFocused) focusManager.moveFocus(FocusDirection.Right)
+                else focusRequester.requestFocus()
+            }),
     )
 }
 

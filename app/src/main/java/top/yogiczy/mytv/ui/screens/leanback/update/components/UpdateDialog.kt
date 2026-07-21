@@ -13,7 +13,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.window.DialogProperties
 import top.yogiczy.mytv.data.entities.GitRelease
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
 fun LeanbackUpdateDialog(
@@ -37,22 +37,18 @@ fun LeanbackUpdateDialog(
             onDismissRequest = onDismissRequest,
             confirmButton = {
                 androidx.tv.material3.Button(
-                    onClick = {},
+                    onClick = onUpdateAndInstall,
                     modifier = Modifier
                         .focusRequester(focusRequester)
-                        .handleLeanbackKeyEvents(
-                            onSelect = onUpdateAndInstall,
-                        ),
+                        .tvTouchClickable(onClick = onUpdateAndInstall),
                 ) {
                     androidx.tv.material3.Text(text = "立即更新")
                 }
             },
             dismissButton = {
                 androidx.tv.material3.Button(
-                    onClick = {},
-                    modifier = Modifier.handleLeanbackKeyEvents(
-                        onSelect = onDismissRequest,
-                    ),
+                    onClick = onDismissRequest,
+                    modifier = Modifier.tvTouchClickable(onClick = onDismissRequest),
                 ) {
                     androidx.tv.material3.Text(text = "忽略")
                 }
