@@ -65,6 +65,7 @@ fun LeanbackClassicPanelScreen(
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocusedPreview: (Iptv) -> Unit = {},
     onClose: () -> Unit = {},
     autoCloseState: PanelAutoCloseState = rememberPanelAutoCloseState(
         timeout = Constants.UI_SCREEN_AUTO_CLOSE_DELAY,
@@ -91,6 +92,7 @@ fun LeanbackClassicPanelScreen(
             onIptvFavoriteListVisibleChange = onIptvFavoriteListVisibleChange,
             onIptvFavoriteToggle = onIptvFavoriteToggle,
             onPlayCatchup = onPlayCatchup,
+            onIptvFocusedPreview = onIptvFocusedPreview,
             onUserAction = { autoCloseState.active() },
         )
     }
@@ -140,6 +142,7 @@ private fun LeanbackClassicPanelScreenContent(
     onIptvFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocusedPreview: (Iptv) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
     val iptvGroupList = iptvGroupListProvider()
@@ -214,6 +217,8 @@ private fun LeanbackClassicPanelScreenContent(
             { iptv: Iptv, focusRequester: FocusRequester ->
                 focusedIptv = iptv
                 focusedIptvFocusRequester = focusRequester
+                // 光标停留时通知上层去抖预缓冲
+                onIptvFocusedPreview(iptv)
             }
         }
         val isFavoriteListProvider = remember(focusedIptvGroup) {

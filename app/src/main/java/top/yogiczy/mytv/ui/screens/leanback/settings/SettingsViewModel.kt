@@ -66,6 +66,14 @@ class LeanbackSettingsViewModel : ViewModel() {
             SP.iptvChannelChangeFlip = value
         }
 
+    private var _iptvPrebufferEnable by mutableStateOf(SP.iptvPrebufferEnable)
+    var iptvPrebufferEnable: Boolean
+        get() = _iptvPrebufferEnable
+        set(value) {
+            _iptvPrebufferEnable = value
+            SP.iptvPrebufferEnable = value
+        }
+
     private var _iptvSourceSimplify by mutableStateOf(SP.iptvSourceSimplify)
     var iptvSourceSimplify: Boolean
         get() = _iptvSourceSimplify

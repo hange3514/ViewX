@@ -39,6 +39,7 @@ fun LeanbackPanelIptvList(
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, top.yogiczy.mytv.data.entities.EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocused: (Iptv) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
     val iptvList = iptvListProvider()
@@ -78,6 +79,7 @@ fun LeanbackPanelIptvList(
                     showEpgDialog = true
                 }
             }
+            val onFocused = remember(iptv) { { onIptvFocused(iptv) } }
             val initialFocused = iptv == currentIptvProvider() && !hasFocused
 
             LeanbackPanelIptvItem(
@@ -89,6 +91,7 @@ fun LeanbackPanelIptvList(
                 onShowEpg = onShowEpg,
                 initialFocusedProvider = { initialFocused },
                 onHasFocused = { hasFocused = true },
+                onFocused = onFocused,
             )
         }
     }

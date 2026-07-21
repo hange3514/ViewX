@@ -44,6 +44,9 @@ object SP {
         /** 换台反转 */
         IPTV_CHANNEL_CHANGE_FLIP,
 
+        /** 换台预缓冲 */
+        IPTV_PREBUFFER_ENABLE,
+
         /** 直播源精简 */
         IPTV_SOURCE_SIMPLIFY,
 
@@ -158,6 +161,11 @@ object SP {
     var iptvChannelChangeFlip: Boolean
         get() = sp.getBoolean(KEY.IPTV_CHANNEL_CHANGE_FLIP.name, false)
         set(value) = sp.edit().putBoolean(KEY.IPTV_CHANNEL_CHANGE_FLIP.name, value).apply()
+
+    /** 换台预缓冲（待机播放器提前缓冲预测频道） */
+    var iptvPrebufferEnable: Boolean
+        get() = sp.getBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, true)
+        set(value) = sp.edit().putBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, value).apply()
 
     /** 直播源精简 */
     var iptvSourceSimplify: Boolean

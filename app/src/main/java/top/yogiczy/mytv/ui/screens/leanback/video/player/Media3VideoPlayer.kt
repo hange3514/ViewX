@@ -33,6 +33,10 @@ import androidx.media3.common.PlaybackException as Media3PlaybackException
 class LeanbackMedia3VideoPlayer(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
+    minBufferMs: Int = 60_000,
+    maxBufferMs: Int = 120_000,
+    bufferForPlaybackMs: Int = 2_000,
+    bufferForPlaybackAfterRebufferMs: Int = 3_000,
 ) : LeanbackVideoPlayer(coroutineScope) {
     // EXTENSION_RENDERER_MODE_ON 让 FFmpeg 扩展解码器参与选择；
     // 当前 lib-decoder-ffmpeg-release.aar 提供音频解码器，用于 MPEG-L2 等 Android 原生不支持的音轨。
@@ -42,10 +46,10 @@ class LeanbackMedia3VideoPlayer(
     ).setLoadControl(
         DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                60_000, // 最小缓冲 60 秒，网络抖动时更耐播
-                120_000, // 最大缓冲 120 秒，回放/时移流可多缓存内容
-                2000, // 缓冲 2 秒就开始播放
-                3000, // rebuffer 后 3 秒继续播放
+                minBufferMs,
+                maxBufferMs,
+                bufferForPlaybackMs,
+                bufferForPlaybackAfterRebufferMs,
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -239,6 +243,10 @@ class LeanbackMedia3VideoPlayer(
 
     override fun pause() {
         videoPlayer.pause()
+    }
+
+    override fun setVolume(volume: Float) {
+        videoPlayer.volume = volume
     }
 
     override fun seekTo(positionMs: Long) {

@@ -65,6 +65,7 @@ fun LeanbackPanelScreen(
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocused: (Iptv) -> Unit = {},
     onClose: () -> Unit = {},
     autoCloseState: PanelAutoCloseState = rememberPanelAutoCloseState(
         timeout = Constants.UI_SCREEN_AUTO_CLOSE_DELAY,
@@ -105,6 +106,7 @@ fun LeanbackPanelScreen(
             onIptvSelected = onIptvSelected,
             onIptvFavoriteToggle = onIptvFavoriteToggle,
             onPlayCatchup = onPlayCatchup,
+            onIptvFocused = onIptvFocused,
             onClose = onClose,
         )
     }
@@ -160,6 +162,7 @@ private fun LeanbackPanelScreenBottom(
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocused: (Iptv) -> Unit = {},
     onClose: () -> Unit = {},
 ) {
     val childPadding = rememberLeanbackChildPadding()
@@ -199,6 +202,7 @@ private fun LeanbackPanelScreenBottom(
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
                 onPlayCatchup = onPlayCatchup,
+                onIptvFocused = onIptvFocused,
             )
         }
     }
@@ -218,6 +222,7 @@ fun LeanbackPanelScreenBottomIptvList(
     onIptvSelected: (Iptv) -> Unit = {},
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
+    onIptvFocused: (Iptv) -> Unit = {},
 ) {
     val iptvFavoriteEnable = iptvFavoriteEnableProvider()
     var favoriteListVisible by remember { mutableStateOf(iptvFavoriteListVisibleProvider()) }
@@ -271,6 +276,7 @@ fun LeanbackPanelScreenBottomIptvList(
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
                 onPlayCatchup = onPlayCatchup,
                 onToFavorite = onToFavorite,
+                onIptvFocused = onIptvFocused,
             )
     }
 }

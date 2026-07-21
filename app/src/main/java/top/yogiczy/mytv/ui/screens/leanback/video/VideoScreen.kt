@@ -24,6 +24,7 @@ fun LeanbackVideoScreen(
     val context = LocalContext.current
     val childPadding = rememberLeanbackChildPadding()
     val boundSurfaceView = remember { mutableStateOf<SurfaceView?>(null) }
+    val boundState = remember { mutableStateOf<LeanbackVideoPlayerState?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
@@ -33,14 +34,15 @@ fun LeanbackVideoScreen(
             factory = {
                 // PlayerView 切换视频时黑屏闪烁，使用 SurfaceView 代替
                 SurfaceView(context).also {
-                    state.setVideoSurfaceView(it)
                     boundSurfaceView.value = it
                 }
             },
             update = { surfaceView ->
-                if (boundSurfaceView.value != surfaceView) {
+                // 主备播放器交换角色时，把 Surface 重新绑定到新的活跃播放器
+                if (boundState.value !== state) {
+                    boundState.value?.clearVideoSurface()
                     state.setVideoSurfaceView(surfaceView)
-                    boundSurfaceView.value = surfaceView
+                    boundState.value = state
                 }
             },
         )

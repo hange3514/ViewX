@@ -52,8 +52,17 @@ class LeanbackVideoPlayerState(
         instance.pause()
     }
 
+    /** 音量（0.0~1.0） */
+    fun setVolume(volume: Float) {
+        instance.setVolume(volume)
+    }
+
     fun setVideoSurfaceView(surfaceView: SurfaceView) {
         instance.setVideoSurfaceView(surfaceView)
+    }
+
+    fun clearVideoSurface() {
+        instance.clearVideoSurface()
     }
 
     fun seekTo(positionMs: Long) {
@@ -113,6 +122,10 @@ class LeanbackVideoPlayerState(
 @Composable
 fun rememberLeanbackVideoPlayerState(
     defaultAspectRatioProvider: () -> Float? = { null },
+    minBufferMs: Int = 60_000,
+    maxBufferMs: Int = 120_000,
+    bufferForPlaybackMs: Int = 2_000,
+    bufferForPlaybackAfterRebufferMs: Int = 3_000,
 ): LeanbackVideoPlayerState {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -121,7 +134,14 @@ fun rememberLeanbackVideoPlayerState(
     val latestAspectRatioProvider by rememberUpdatedState(defaultAspectRatioProvider)
     val state = remember {
         LeanbackVideoPlayerState(
-            LeanbackCompositeVideoPlayer(context, coroutineScope),
+            LeanbackCompositeVideoPlayer(
+                context = context,
+                coroutineScope = coroutineScope,
+                minBufferMs = minBufferMs,
+                maxBufferMs = maxBufferMs,
+                bufferForPlaybackMs = bufferForPlaybackMs,
+                bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
+            ),
             defaultAspectRatioProvider = { latestAspectRatioProvider() },
         )
     }

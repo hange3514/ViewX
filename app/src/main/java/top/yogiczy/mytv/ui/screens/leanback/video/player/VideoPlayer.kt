@@ -37,6 +37,9 @@ abstract class LeanbackVideoPlayer(
 
     abstract fun pause()
 
+    /** 音量（0.0~1.0），待机播放器用于静音预缓冲 */
+    open fun setVolume(volume: Float) {}
+
     abstract fun setVideoSurfaceView(surfaceView: SurfaceView)
 
     open fun clearVideoSurface() {}

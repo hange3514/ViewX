@@ -100,13 +100,24 @@ fun LeanbackMainContent(
     val videoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
     )
+    // 待机播放器：静音、小缓冲，用于换台预缓冲；命中时与主播放器交换角色
+    val standbyVideoPlayerState = rememberLeanbackVideoPlayerState(
+        defaultAspectRatioProvider = defaultAspectRatioProvider,
+        minBufferMs = 5_000,
+        maxBufferMs = 5_000,
+        bufferForPlaybackMs = 500,
+        bufferForPlaybackAfterRebufferMs = 1_000,
+    )
     // EPG 是异步加载的，用 rememberUpdatedState 保证 state 内读取到的始终是最新节目单
     val latestEpgList by rememberUpdatedState(epgList)
     val mainContentState = rememberLeanbackMainContentState(
         videoPlayerState = videoPlayerState,
+        standbyVideoPlayerState = standbyVideoPlayerState,
         iptvGroupList = iptvGroupList,
         epgListProvider = { latestEpgList },
     )
+    val activeVideoPlayerState =
+        if (mainContentState.activePlayerIndex == 0) videoPlayerState else standbyVideoPlayerState
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
             val channelNo = it.toIntOrNull()?.let { no -> no - 1 } ?: -1
@@ -200,8 +211,19 @@ fun LeanbackMainContent(
     val channelNoIntProvider = remember {
         { iptvGroupList.iptvIdx(mainContentState.currentIptv) + 1 }
     }
-    val videoPlayerMetadataProvider = remember { { videoPlayerState.metadata } }
-    val videoPlayerAspectRatioProvider = remember { { videoPlayerState.aspectRatio } }
+    // 主备交换后活跃播放器会变，必须在调用时按角色动态取值，不能捕获固定实例
+    val videoPlayerMetadataProvider = remember {
+        {
+            (if (mainContentState.activePlayerIndex == 0) videoPlayerState
+            else standbyVideoPlayerState).metadata
+        }
+    }
+    val videoPlayerAspectRatioProvider = remember {
+        {
+            (if (mainContentState.activePlayerIndex == 0) videoPlayerState
+            else standbyVideoPlayerState).aspectRatio
+        }
+    }
     val showMetadataProvider = remember(settingsViewModel.debugShowVideoPlayerMetadata) {
         { settingsViewModel.debugShowVideoPlayerMetadata }
     }
@@ -254,6 +276,7 @@ fun LeanbackMainContent(
     }
 
     val onIptvSelected = remember { { iptv: Iptv -> mainContentState.changeCurrentIptv(iptv) } }
+    val onIptvFocusPreview = remember { { iptv: Iptv -> mainContentState.prebufferChannel(iptv) } }
     val onPlayCatchup =
         remember { { iptv: Iptv, programme: EpgProgramme -> mainContentState.playCatchup(iptv, programme) } }
     val onIptvFavoriteToggle = remember(settingsViewModel.iptvChannelFavoriteEnable) {
@@ -282,7 +305,12 @@ fun LeanbackMainContent(
         }
     }
     val onChangeVideoPlayerAspectRatio =
-        remember { { ratio: Float -> videoPlayerState.aspectRatio = ratio } }
+        remember {
+            { ratio: Float ->
+                (if (mainContentState.activePlayerIndex == 0) videoPlayerState
+                else standbyVideoPlayerState).aspectRatio = ratio
+            }
+        }
     val onIptvUrlIdxChange = remember {
         { urlIdx: Int ->
             mainContentState.changeCurrentIptv(
@@ -364,7 +392,7 @@ fun LeanbackMainContent(
         onBackPressed = onBackPressedHandler,
     ) {
         LeanbackVideoScreen(
-            state = videoPlayerState,
+            state = activeVideoPlayerState,
             showMetadataProvider = showMetadataProvider,
             modifier = Modifier
                 .focusRequester(focusRequester)
@@ -487,6 +515,7 @@ fun LeanbackMainContent(
                     onIptvFavoriteToggle = onIptvFavoriteToggle,
                     onClose = { mainContentState.isPanelVisible = false },
                     onPlayCatchup = onPlayCatchup,
+                    onIptvFocused = onIptvFocusPreview,
                 )
             }
 
@@ -505,6 +534,7 @@ fun LeanbackMainContent(
                     onIptvFavoriteToggle = onIptvFavoriteToggle,
                     onClose = { mainContentState.isPanelVisible = false },
                     onPlayCatchup = onPlayCatchup,
+                    onIptvFocusedPreview = onIptvFocusPreview,
                 )
             }
         }

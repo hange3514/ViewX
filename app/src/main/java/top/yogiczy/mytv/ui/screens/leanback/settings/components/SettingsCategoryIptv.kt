@@ -93,6 +93,23 @@ fun LeanbackSettingsCategoryIptv(
 
         item {
             LeanbackSettingsCategoryListItem(
+                headlineContent = "换台预缓冲",
+                supportingContent = "提前缓冲预测频道和光标停留的频道，换台更快（性能弱的设备可关闭）",
+                trailingContent = {
+                    Switch(
+                        checked = settingsViewModel.iptvPrebufferEnable,
+                        onCheckedChange = null
+                    )
+                },
+                onSelected = {
+                    settingsViewModel.iptvPrebufferEnable =
+                        !settingsViewModel.iptvPrebufferEnable
+                },
+            )
+        }
+
+        item {
+            LeanbackSettingsCategoryListItem(
                 headlineContent = "直播源精简",
                 supportingContent = if (settingsViewModel.iptvSourceSimplify) "显示精简直播源(仅央视、地方卫视)" else "显示完整直播源",
                 trailingContent = {

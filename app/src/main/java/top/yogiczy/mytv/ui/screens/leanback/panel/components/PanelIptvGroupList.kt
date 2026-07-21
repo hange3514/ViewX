@@ -42,6 +42,7 @@ fun LeanbackPanelIptvGroupList(
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, top.yogiczy.mytv.data.entities.EpgProgramme) -> Unit = { _, _ -> },
     onToFavorite: () -> Unit = {},
+    onIptvFocused: (Iptv) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
     val iptvGroupList = iptvGroupListProvider()
@@ -94,6 +95,7 @@ fun LeanbackPanelIptvGroupList(
                 onIptvSelected = onIptvSelected,
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
                 onPlayCatchup = onPlayCatchup,
+                onIptvFocused = onIptvFocused,
                 onUserAction = onUserAction,
             )
         }

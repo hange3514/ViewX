@@ -12,9 +12,20 @@ import kotlinx.coroutines.CoroutineScope
 class LeanbackCompositeVideoPlayer(
     context: Context,
     coroutineScope: CoroutineScope,
+    minBufferMs: Int = 60_000,
+    maxBufferMs: Int = 120_000,
+    bufferForPlaybackMs: Int = 2_000,
+    bufferForPlaybackAfterRebufferMs: Int = 3_000,
 ) : LeanbackVideoPlayer(coroutineScope) {
 
-    private val media3Player = LeanbackMedia3VideoPlayer(context, coroutineScope)
+    private val media3Player = LeanbackMedia3VideoPlayer(
+        context = context,
+        coroutineScope = coroutineScope,
+        minBufferMs = minBufferMs,
+        maxBufferMs = maxBufferMs,
+        bufferForPlaybackMs = bufferForPlaybackMs,
+        bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
+    )
 
     override fun initialize() {
         super.initialize()
@@ -46,6 +57,10 @@ class LeanbackCompositeVideoPlayer(
 
     override fun pause() {
         media3Player.pause()
+    }
+
+    override fun setVolume(volume: Float) {
+        media3Player.setVolume(volume)
     }
 
     override fun seekTo(positionMs: Long) {
