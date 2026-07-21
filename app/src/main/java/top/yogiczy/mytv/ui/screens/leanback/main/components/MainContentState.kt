@@ -49,6 +49,9 @@ class LeanbackMainContentState(
     private var _replayProgramme by mutableStateOf<EpgProgramme?>(null)
     val replayProgramme get() = _replayProgramme
 
+    private var _isReplayPaused by mutableStateOf(false)
+    val isReplayPaused get() = _isReplayPaused
+
     private var _replayCatchupEndAt by mutableStateOf(0L)
 
     private var _replayCurrentPositionMs by mutableStateOf(0L)
@@ -252,6 +255,12 @@ class LeanbackMainContentState(
         _replayProgressJob = coroutineScope.launch {
             while (isActive && _isReplayMode) {
                 delay(1000)
+                if (_isReplayPaused) {
+                    // 暂停时冻结进度：只刷新基准时间，不累加位置，
+                    // 否则恢复播放后位置虚高，seek 会跳错位置
+                    _replayPositionBaseTime = System.currentTimeMillis()
+                    continue
+                }
                 val elapsed = System.currentTimeMillis() - _replayPositionBaseTime
                 if (elapsed > 0) {
                     _replayCurrentPositionMs += elapsed
@@ -261,8 +270,18 @@ class LeanbackMainContentState(
         }
     }
 
+    /**
+     * 回放暂停/继续切换
+     */
+    fun toggleReplayPause() {
+        if (!_isReplayMode) return
+        _isReplayPaused = !_isReplayPaused
+        if (_isReplayPaused) videoPlayerState.pause() else videoPlayerState.play()
+    }
+
     private fun resetReplayMode() {
         _isReplayMode = false
+        _isReplayPaused = false
         _replayProgramme = null
         _replayCatchupEndAt = 0L
         _replayCurrentPositionMs = 0L
@@ -379,7 +398,10 @@ class LeanbackMainContentState(
         _replayPositionBaseTime = now
 
         log.d("回放seek: ${programme.title}, target=${targetMs}ms, url=$catchupUrl")
+        // seek 后强制恢复播放：pause 后 prepare 不会自动恢复 playWhenReady
+        _isReplayPaused = false
         videoPlayerState.prepare(catchupUrl)
+        videoPlayerState.play()
     }
 
 }

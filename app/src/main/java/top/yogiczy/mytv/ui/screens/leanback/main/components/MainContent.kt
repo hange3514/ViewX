@@ -133,18 +133,19 @@ fun LeanbackMainContent(
         }
     }
 
-    val seekOverlayVisible = remember { mutableStateOf(false) }
-    val seekOverlayTrigger = remember { mutableIntStateOf(0) }
-    val showSeekOverlay = remember {
+    // 回放控制条：呼出后 5 秒无操作自动隐藏（暂停时常显，由组件内部处理）
+    val replayBarVisible = remember { mutableStateOf(false) }
+    val replayBarTrigger = remember { mutableIntStateOf(0) }
+    val showReplayBar = remember {
         {
-            seekOverlayVisible.value = true
-            seekOverlayTrigger.intValue++
+            replayBarVisible.value = true
+            replayBarTrigger.intValue++
         }
     }
-    LaunchedEffect(seekOverlayTrigger.intValue) {
-        if (seekOverlayVisible.value) {
-            delay(2000)
-            seekOverlayVisible.value = false
+    LaunchedEffect(replayBarTrigger.intValue, mainContentState.isReplayPaused) {
+        if (replayBarVisible.value && !mainContentState.isReplayPaused) {
+            delay(5000)
+            if (!mainContentState.isReplayPaused) replayBarVisible.value = false
         }
     }
 
@@ -156,7 +157,7 @@ fun LeanbackMainContent(
             delay(REPLAY_SEEK_CONTINUOUS_INITIAL_DELAY_MS)
             while (isActive) {
                 mainContentState.seekReplay(offsetMs)
-                showSeekOverlay()
+                showReplayBar()
                 delay(REPLAY_SEEK_CONTINUOUS_INTERVAL_MS)
             }
         }
@@ -313,7 +314,7 @@ fun LeanbackMainContent(
             if (noOverlayVisible) {
                 if (mainContentState.isReplayMode) {
                     mainContentState.seekReplay(-REPLAY_SEEK_OFFSET_MS)
-                    showSeekOverlay()
+                    showReplayBar()
                 } else if (mainContentState.currentIptv.urlList.size > 1) {
                     mainContentState.changeCurrentIptv(
                         iptv = mainContentState.currentIptv,
@@ -328,7 +329,7 @@ fun LeanbackMainContent(
             if (noOverlayVisible) {
                 if (mainContentState.isReplayMode) {
                     mainContentState.seekReplay(REPLAY_SEEK_OFFSET_MS)
-                    showSeekOverlay()
+                    showReplayBar()
                 } else if (mainContentState.currentIptv.urlList.size > 1) {
                     mainContentState.changeCurrentIptv(
                         iptv = mainContentState.currentIptv,
@@ -377,7 +378,20 @@ fun LeanbackMainContent(
                     onRight = onKeyRight,
                     onRightDown = { startContinuousSeek(REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
                     onRightUp = { stopContinuousSeek() },
-                    onSelect = { if (noOverlayVisible) mainContentState.isPanelVisible = true },
+                    onSelect = {
+                        if (noOverlayVisible) {
+                            if (mainContentState.isReplayMode) {
+                                // 回放中：OK 呼出控制条，控制条显示时再按 OK 暂停/继续
+                                if (replayBarVisible.value || mainContentState.isReplayPaused) {
+                                    mainContentState.toggleReplayPause()
+                                } else {
+                                    showReplayBar()
+                                }
+                            } else {
+                                mainContentState.isPanelVisible = true
+                            }
+                        }
+                    },
                     onLongSelect = { if (noOverlayVisible) mainContentState.isQuickPanelVisible = true },
                     onSettings = onKeySettings,
                     onNumber = onKeyNumber,
@@ -391,10 +405,19 @@ fun LeanbackMainContent(
                 ),
         )
 
-        LeanbackReplaySeekOverlay(
-            visibleProvider = { seekOverlayVisible.value },
+        LeanbackReplayControlBar(
+            visibleProvider = { replayBarVisible.value },
             replayProgrammeProvider = replayProgrammeProvider,
             currentPositionMsProvider = { mainContentState.replayCurrentPositionMs },
+            isPausedProvider = remember { { mainContentState.isReplayPaused } },
+            segmentInfoProvider = remember {
+                {
+                    val programme = mainContentState.replayProgramme
+                    val programmes = epgProvider()?.programmes ?: emptyList()
+                    val index = programmes.indexOfFirst { it.startAt == programme?.startAt }
+                    if (index >= 0) "第${index + 1}/${programmes.size}段" else ""
+                }
+            },
         )
 
         CompositionLocalProvider(
