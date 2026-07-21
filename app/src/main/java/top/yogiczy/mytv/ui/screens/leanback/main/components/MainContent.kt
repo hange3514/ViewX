@@ -100,8 +100,15 @@ fun LeanbackMainContent(
     val videoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
     )
-    // 待机播放器：静音、小缓冲，用于换台预缓冲；命中时与主播放器交换角色
+    // 待机播放器×2：静音、小缓冲，用于换台预缓冲（上下两个方向）；命中时轮换角色
     val standbyVideoPlayerState = rememberLeanbackVideoPlayerState(
+        defaultAspectRatioProvider = defaultAspectRatioProvider,
+        minBufferMs = 5_000,
+        maxBufferMs = 5_000,
+        bufferForPlaybackMs = 500,
+        bufferForPlaybackAfterRebufferMs = 1_000,
+    )
+    val extraStandbyVideoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
         minBufferMs = 5_000,
         maxBufferMs = 5_000,
@@ -113,11 +120,15 @@ fun LeanbackMainContent(
     val mainContentState = rememberLeanbackMainContentState(
         videoPlayerState = videoPlayerState,
         standbyVideoPlayerState = standbyVideoPlayerState,
+        extraStandbyVideoPlayerState = extraStandbyVideoPlayerState,
         iptvGroupList = iptvGroupList,
         epgListProvider = { latestEpgList },
     )
-    val activeVideoPlayerState =
-        if (mainContentState.activePlayerIndex == 0) videoPlayerState else standbyVideoPlayerState
+    val activeVideoPlayerState = when (mainContentState.activePlayerIndex) {
+        0 -> videoPlayerState
+        1 -> standbyVideoPlayerState
+        else -> extraStandbyVideoPlayerState
+    }
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
             val channelNo = it.toIntOrNull()?.let { no -> no - 1 } ?: -1
@@ -211,17 +222,23 @@ fun LeanbackMainContent(
     val channelNoIntProvider = remember {
         { iptvGroupList.iptvIdx(mainContentState.currentIptv) + 1 }
     }
-    // 主备交换后活跃播放器会变，必须在调用时按角色动态取值，不能捕获固定实例
+    // 主备轮换后活跃播放器会变，必须在调用时按角色动态取值，不能捕获固定实例
     val videoPlayerMetadataProvider = remember {
         {
-            (if (mainContentState.activePlayerIndex == 0) videoPlayerState
-            else standbyVideoPlayerState).metadata
+            (when (mainContentState.activePlayerIndex) {
+                0 -> videoPlayerState
+                1 -> standbyVideoPlayerState
+                else -> extraStandbyVideoPlayerState
+            }).metadata
         }
     }
     val videoPlayerAspectRatioProvider = remember {
         {
-            (if (mainContentState.activePlayerIndex == 0) videoPlayerState
-            else standbyVideoPlayerState).aspectRatio
+            (when (mainContentState.activePlayerIndex) {
+                0 -> videoPlayerState
+                1 -> standbyVideoPlayerState
+                else -> extraStandbyVideoPlayerState
+            }).aspectRatio
         }
     }
     val showMetadataProvider = remember(settingsViewModel.debugShowVideoPlayerMetadata) {
@@ -307,8 +324,11 @@ fun LeanbackMainContent(
     val onChangeVideoPlayerAspectRatio =
         remember {
             { ratio: Float ->
-                (if (mainContentState.activePlayerIndex == 0) videoPlayerState
-                else standbyVideoPlayerState).aspectRatio = ratio
+                (when (mainContentState.activePlayerIndex) {
+                    0 -> videoPlayerState
+                    1 -> standbyVideoPlayerState
+                    else -> extraStandbyVideoPlayerState
+                }).aspectRatio = ratio
             }
         }
     val onIptvUrlIdxChange = remember {

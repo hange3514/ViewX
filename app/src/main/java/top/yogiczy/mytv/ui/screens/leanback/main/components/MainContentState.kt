@@ -35,27 +35,34 @@ class LeanbackMainContentState(
     private val coroutineScope: CoroutineScope,
     private val videoPlayerState: LeanbackVideoPlayerState,
     private val standbyVideoPlayerState: LeanbackVideoPlayerState,
+    private val extraStandbyVideoPlayerState: LeanbackVideoPlayerState,
     private val iptvGroupList: IptvGroupList,
     private val epgListProvider: () -> EpgList,
 ) : Loggable() {
+    private val playerStates =
+        listOf(videoPlayerState, standbyVideoPlayerState, extraStandbyVideoPlayerState)
+
     private var _currentIptv by mutableStateOf(Iptv())
     val currentIptv get() = _currentIptv
 
     private var _currentIptvUrlIdx by mutableIntStateOf(0)
     val currentIptvUrlIdx get() = _currentIptvUrlIdx
 
-    /** 当前活跃（显示画面）的播放器序号：0=主播放器，1=待机播放器；预缓冲命中时交换 */
+    /** 当前活跃（显示画面）的播放器序号；预缓冲命中时在三个播放器间轮换 */
     private var _activePlayerIndex by mutableIntStateOf(0)
     val activePlayerIndex get() = _activePlayerIndex
 
-    private val activePlayer get() = if (_activePlayerIndex == 0) videoPlayerState else standbyVideoPlayerState
-    private val standbyPlayer get() = if (_activePlayerIndex == 0) standbyVideoPlayerState else videoPlayerState
+    private val activePlayer get() = playerStates[_activePlayerIndex]
 
-    /** 待机播放器当前预缓冲的 URL */
-    private var _prebufferedUrl: String? = null
+    /** 每个播放器当前加载的内容 URL，预缓冲命中判定与"来路"保留都靠它 */
+    private val playerContents = MutableList<String?>(playerStates.size) { null }
 
-    /** 待机播放器连续异常（如设备不支持双解码器）时自动停用预缓冲 */
+    /** 预缓冲总开关（待机播放器持续异常时自动停用） */
     private var _prebufferAvailable = true
+
+    /** 双待机（上下两个方向同时预缓冲）；设备撑不住时自动降级为按方向单待机 */
+    private var _dualStandbyAvailable = true
+
     private var _standbyErrorCount = 0
 
     /** 最近换台方向：1 下一个，-1 上一个，用于预测预缓冲目标 */
@@ -111,8 +118,8 @@ class LeanbackMainContentState(
         }
 
     init {
-        // 主备两个播放器注册同一套处理器，按当前角色路由事件
-        listOf(videoPlayerState, standbyVideoPlayerState).forEachIndexed { index, state ->
+        // 三个播放器注册同一套处理器，按当前角色路由事件
+        playerStates.forEachIndexed { index, state ->
             state.onReady {
                 if (index == _activePlayerIndex) onActiveReady() else onStandbyReady(state)
             }
@@ -184,50 +191,82 @@ class LeanbackMainContentState(
         coroutineScope.launch {
             delay(2000)
             // 期间若已被提升为活跃播放器则不处理
-            if (state == standbyPlayer) state.pause()
+            if (state != activePlayer) state.pause()
         }
     }
 
     /**
-     * 待机播放器异常：连续多次失败才停用（单次的可能是预测到的频道本身不可用，
-     * 连续失败才说明设备不支持双解码器之类的硬限制）
+     * 待机播放器异常：连续失败先降级为单待机（猜方向），再失败则完全停用。
+     * 单次失败可能只是预测到的频道本身不可用，连续失败才说明设备解码能力受限
      */
     private fun onStandbyError() {
         _standbyErrorCount++
-        if (_standbyErrorCount >= 3 && _prebufferAvailable) {
-            log.d("待机播放器连续异常，停用换台预缓冲")
+        if (_standbyErrorCount >= 3 && _dualStandbyAvailable) {
+            log.d("待机播放器连续异常，降级为单方向预缓冲")
+            _dualStandbyAvailable = false
+        }
+        if (_standbyErrorCount >= 6 && _prebufferAvailable) {
+            log.d("待机播放器持续异常，停用换台预缓冲")
             _prebufferAvailable = false
         }
     }
 
     /**
-     * 预缓冲指定频道到待机播放器
+     * 频道的最优线路（优先可播放域名记忆）
      */
-    private fun prebuffer(targetIptv: Iptv) {
-        if (!_prebufferAvailable || !SP.iptvPrebufferEnable) return
-        if (_isReplayMode) return
-        if (targetIptv == _currentIptv || targetIptv.urlList.isEmpty()) return
-
-        val urlIdx = max(0, targetIptv.urlList.indexOfFirst {
+    private fun bestUrlOrNull(iptv: Iptv): String? {
+        if (iptv.urlList.isEmpty()) return null
+        val idx = max(0, iptv.urlList.indexOfFirst {
             SP.iptvPlayableHostList.contains(getUrlHost(it))
         })
-        val url = targetIptv.urlList[urlIdx]
-        if (_prebufferedUrl == url) return
-
-        _prebufferedUrl = url
-        log.d("预缓冲: ${targetIptv.name} $url")
-        standbyPlayer.setVolume(0f)
-        standbyPlayer.prepare(url)
+        return iptv.urlList[idx]
     }
 
     /**
-     * 换台稳定后，按最近换台方向预测并预缓冲下一个频道
+     * 预缓冲指定频道到指定播放器（内容未变化时跳过）
+     */
+    private fun prebufferInto(playerIndex: Int, targetIptv: Iptv) {
+        if (!_prebufferAvailable || !SP.iptvPrebufferEnable) return
+        if (_isReplayMode) return
+        if (playerIndex == _activePlayerIndex) return
+        if (targetIptv == _currentIptv) return
+        val url = bestUrlOrNull(targetIptv) ?: return
+        if (playerContents[playerIndex] == url) return
+
+        playerContents[playerIndex] = url
+        log.d("预缓冲[$playerIndex]: ${targetIptv.name} $url")
+        playerStates[playerIndex].setVolume(0f)
+        playerStates[playerIndex].prepare(url)
+    }
+
+    /**
+     * 换台稳定后预测预缓冲：
+     * 双待机模式上下两个方向都预缓冲；降级模式只按最近换台方向猜一个。
+     * 旧活跃播放器保留刚切走的频道内容，往回翻台也能秒切
      */
     private fun schedulePrediction() {
         predictionJob?.cancel()
         predictionJob = coroutineScope.launch {
             delay(500)
-            prebuffer(if (_lastFlipDirection >= 0) getNextIptv() else getPrevIptv())
+            if (!_prebufferAvailable || !SP.iptvPrebufferEnable || _isReplayMode) return@launch
+
+            val forwardIptv = if (_lastFlipDirection >= 0) getNextIptv() else getPrevIptv()
+            val backwardIptv = if (_lastFlipDirection >= 0) getPrevIptv() else getNextIptv()
+            val forwardUrl = bestUrlOrNull(forwardIptv)
+            val backwardUrl = if (_dualStandbyAvailable) bestUrlOrNull(backwardIptv) else null
+
+            val standbyIdxs = playerStates.indices.filter { it != _activePlayerIndex }
+
+            // 后退方向：没有待机持有时，放进未持有前进内容的那个待机
+            if (backwardUrl != null && standbyIdxs.none { playerContents[it] == backwardUrl }) {
+                standbyIdxs.firstOrNull { playerContents[it] != forwardUrl }
+                    ?.let { prebufferInto(it, backwardIptv) }
+            }
+            // 前进方向：没有待机持有时，放进未持有后退内容的那个待机
+            if (forwardUrl != null && standbyIdxs.none { playerContents[it] == forwardUrl }) {
+                standbyIdxs.firstOrNull { playerContents[it] != backwardUrl }
+                    ?.let { prebufferInto(it, forwardIptv) }
+            }
         }
     }
 
@@ -239,7 +278,11 @@ class LeanbackMainContentState(
         cursorPrebufferJob?.cancel()
         cursorPrebufferJob = coroutineScope.launch {
             delay(400)
-            prebuffer(iptv)
+            if (iptv == _currentIptv) return@launch
+            val url = bestUrlOrNull(iptv) ?: return@launch
+            if (playerContents.any { it == url }) return@launch
+            val standbyIdxs = playerStates.indices.filter { it != _activePlayerIndex }
+            standbyIdxs.firstOrNull()?.let { prebufferInto(it, iptv) }
         }
     }
 
@@ -289,10 +332,14 @@ class LeanbackMainContentState(
         val url = iptv.urlList[_currentIptvUrlIdx]
         log.d("播放${iptv.name}（${_currentIptvUrlIdx + 1}/${_currentIptv.urlList.size}）: $url")
 
-        if (_prebufferAvailable && SP.iptvPrebufferEnable && _prebufferedUrl == url) {
-            // 命中预缓冲：交换主备角色，待机播放器直接出画面（秒切）
+        val hitIndex = playerContents.indexOfFirst { it != null && it == url }
+        if (_prebufferAvailable && SP.iptvPrebufferEnable &&
+            hitIndex >= 0 && hitIndex != _activePlayerIndex
+        ) {
+            // 命中预缓冲：交换主备角色，待机播放器直接出画面（秒切）；
+            // 旧活跃播放器保留刚切走的频道内容，往回翻台也能秒切
             val oldActive = activePlayer
-            _activePlayerIndex = 1 - _activePlayerIndex
+            _activePlayerIndex = hitIndex
             val newActive = activePlayer
             newActive.setVolume(1f)
             newActive.play()
@@ -303,8 +350,8 @@ class LeanbackMainContentState(
             onActiveReady()
         } else {
             activePlayer.prepare(url)
+            playerContents[_activePlayerIndex] = url
         }
-        _prebufferedUrl = null
         schedulePrediction()
     }
 
@@ -537,6 +584,12 @@ fun rememberLeanbackMainContentState(
         bufferForPlaybackMs = 500,
         bufferForPlaybackAfterRebufferMs = 1_000,
     ),
+    extraStandbyVideoPlayerState: LeanbackVideoPlayerState = rememberLeanbackVideoPlayerState(
+        minBufferMs = 5_000,
+        maxBufferMs = 5_000,
+        bufferForPlaybackMs = 500,
+        bufferForPlaybackAfterRebufferMs = 1_000,
+    ),
     iptvGroupList: IptvGroupList = IptvGroupList(),
     epgListProvider: () -> EpgList = { EpgList() },
 ) = remember {
@@ -544,6 +597,7 @@ fun rememberLeanbackMainContentState(
         coroutineScope = coroutineScope,
         videoPlayerState = videoPlayerState,
         standbyVideoPlayerState = standbyVideoPlayerState,
+        extraStandbyVideoPlayerState = extraStandbyVideoPlayerState,
         iptvGroupList = iptvGroupList,
         epgListProvider = epgListProvider,
     )
