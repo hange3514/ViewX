@@ -67,9 +67,15 @@ class LeanbackMainViewModel : ViewModel() {
                 SP.iptvSourceUrlHistoryList -= SP.iptvSourceUrl
             }
             .map {
-                _uiState.value = LeanbackMainUiState.Ready(iptvGroupList = it)
+                val hiddenGroups = SP.iptvSourceHiddenGroupList
+                val filtered = if (hiddenGroups.isEmpty()) it
+                else IptvGroupList(it.filter { group -> group.name !in hiddenGroups })
+                // 全部隐藏会导致列表为空（用户可能误操作），此时回退为不过滤
+                val visibleGroupList = if (filtered.isEmpty()) it else filtered
+
+                _uiState.value = LeanbackMainUiState.Ready(iptvGroupList = visibleGroupList)
                 SP.iptvSourceUrlHistoryList += SP.iptvSourceUrl
-                it
+                visibleGroupList
             }
             .collect()
     }

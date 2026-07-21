@@ -47,6 +47,9 @@ object SP {
         /** 换台预缓冲 */
         IPTV_PREBUFFER_ENABLE,
 
+        /** 直播源隐藏分组列表 */
+        IPTV_SOURCE_HIDDEN_GROUP_LIST,
+
         /** 直播源精简 */
         IPTV_SOURCE_SIMPLIFY,
 
@@ -166,6 +169,12 @@ object SP {
     var iptvPrebufferEnable: Boolean
         get() = sp.getBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, true)
         set(value) = sp.edit().putBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, value).apply()
+
+    /** 直播源隐藏分组列表（分组名集合，隐藏的组不出现在选台列表） */
+    var iptvSourceHiddenGroupList: Set<String>
+        get() = (sp.getStringSet(KEY.IPTV_SOURCE_HIDDEN_GROUP_LIST.name, emptySet())
+            ?: emptySet()).toSet()
+        set(value) = sp.edit().putStringSet(KEY.IPTV_SOURCE_HIDDEN_GROUP_LIST.name, value).apply()
 
     /** 直播源精简 */
     var iptvSourceSimplify: Boolean

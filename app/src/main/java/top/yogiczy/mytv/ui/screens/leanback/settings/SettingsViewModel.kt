@@ -74,6 +74,14 @@ class LeanbackSettingsViewModel : ViewModel() {
             SP.iptvPrebufferEnable = value
         }
 
+    private var _iptvSourceHiddenGroupList by mutableStateOf(SP.iptvSourceHiddenGroupList)
+    var iptvSourceHiddenGroupList: Set<String>
+        get() = _iptvSourceHiddenGroupList
+        set(value) {
+            _iptvSourceHiddenGroupList = value
+            SP.iptvSourceHiddenGroupList = value
+        }
+
     private var _iptvSourceSimplify by mutableStateOf(SP.iptvSourceSimplify)
     var iptvSourceSimplify: Boolean
         get() = _iptvSourceSimplify

@@ -168,6 +168,23 @@ fun LeanbackSettingsCategoryIptv(
         }
 
         item {
+            var showDialog by remember { mutableStateOf(false) }
+            val hiddenGroups = settingsViewModel.iptvSourceHiddenGroupList
+
+            LeanbackSettingsCategoryListItem(
+                headlineContent = "频道分组显示管理",
+                supportingContent = "选择直播源中哪些分组显示/隐藏，隐藏的分组不出现在选台列表",
+                trailingContent = if (hiddenGroups.isEmpty()) "全部显示" else "隐藏${hiddenGroups.size}个分组",
+                onSelected = { showDialog = true },
+            )
+
+            LeanbackSettingsIptvGroupVisibleDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+            )
+        }
+
+        item {
             LeanbackSettingsCategoryListItem(
                 headlineContent = "清除缓存",
                 supportingContent = "短按清除直播源缓存文件、可播放域名列表",
@@ -312,4 +329,96 @@ private fun LeanbackSettingsCategoryIptvPreview() {
             },
         )
     }
+}
+/**
+ * 频道分组显示管理对话框：列出直播源全部分组，开关控制显示/隐藏；
+ * 关闭对话框时如有变更，触发软重启使选台列表按新配置重建
+ */
+@Composable
+private fun LeanbackSettingsIptvGroupVisibleDialog(
+    modifier: Modifier = Modifier,
+    showDialogProvider: () -> Boolean = { false },
+    onDismissRequest: () -> Unit = {},
+    settingsViewModel: LeanbackSettingsViewModel = viewModel(),
+) {
+    if (!showDialogProvider()) return
+
+    var groupNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var changed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            // 走缓存，不会重新拉网络
+            groupNames = IptvRepository().getIptvGroupList(
+                sourceUrl = SP.iptvSourceUrl,
+                cacheTime = SP.iptvSourceCacheTime,
+                simplify = SP.iptvSourceSimplify,
+            ).map { it.name }
+        } catch (ex: Exception) {
+            loadFailed = true
+        }
+    }
+
+    AlertDialog(
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = modifier,
+        onDismissRequest = {
+            if (changed) {
+                LeanbackToastState.I.showToast("分组显示已更新，正在刷新...")
+                top.yogiczy.mytv.ui.utils.LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+            }
+            onDismissRequest()
+        },
+        confirmButton = { Text(text = "短按切换显示/隐藏；返回键关闭并生效") },
+        title = { Text("频道分组显示管理") },
+        text = {
+            when {
+                loadFailed -> Text("直播源加载失败，请检查网络或先返回播放页")
+                groupNames.isEmpty() -> Text("加载中...")
+                else -> TvLazyColumn(
+                    state = rememberTvLazyListState(),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(groupNames, key = { it }) { groupName ->
+                        val focusRequester = remember { FocusRequester() }
+                        var isFocused by remember { mutableStateOf(false) }
+                        val hiddenGroups = settingsViewModel.iptvSourceHiddenGroupList
+                        val visible = groupName !in hiddenGroups
+
+                        androidx.tv.material3.ListItem(
+                            modifier = Modifier
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                                .handleLeanbackKeyEvents(
+                                    onSelect = {
+                                        if (isFocused) {
+                                            changed = true
+                                            settingsViewModel.iptvSourceHiddenGroupList =
+                                                if (visible) hiddenGroups + groupName
+                                                else hiddenGroups - groupName
+                                        } else {
+                                            focusRequester.requestFocus()
+                                        }
+                                    },
+                                ),
+                            selected = false,
+                            onClick = { },
+                            headlineContent = {
+                                androidx.tv.material3.Text(
+                                    text = groupName,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxLines = 1,
+                                )
+                            },
+                            trailingContent = {
+                                Switch(checked = visible, onCheckedChange = null)
+                            },
+                        )
+                    }
+                }
+            }
+        },
+    )
 }
