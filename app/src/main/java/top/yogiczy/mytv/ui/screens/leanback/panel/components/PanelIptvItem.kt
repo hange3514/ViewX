@@ -73,7 +73,8 @@ fun LeanbackPanelIptvItem(
     }
 
     androidx.tv.material3.Card(
-        onClick = { },
+        onClick = { onIptvSelected() },
+        onLongClick = { onIptvFavoriteToggle() },
         modifier = modifier
             .width(130.dp)
             .height(54.dp)
@@ -83,14 +84,7 @@ fun LeanbackPanelIptvItem(
                 if (isFocused) onFocused()
             }
             .handleLeanbackKeyEvents(
-                onSelect = {
-                    if (isFocused) onIptvSelected()
-                    else focusRequester.requestFocus()
-                },
-                onLongSelect = {
-                    if (isFocused) onIptvFavoriteToggle()
-                    else focusRequester.requestFocus()
-                },
+                // 菜单键查看节目单仍走按键处理（tv 组件没有对应回调）
                 onSettings = {
                     if (isFocused) onShowEpg()
                     else focusRequester.requestFocus()

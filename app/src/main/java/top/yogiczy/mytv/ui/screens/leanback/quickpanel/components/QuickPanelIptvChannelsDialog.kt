@@ -120,15 +120,9 @@ private fun LeanbackQuickPanelIptvChannelItem(
     androidx.tv.material3.ListItem(
         modifier = modifier
             .focusRequester(focusRequester)
-            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-            .handleLeanbackKeyEvents(
-                onSelect = {
-                    if (isFocused) onSelect()
-                    else focusRequester.requestFocus()
-                },
-            ),
+            .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
         selected = isSelected,
-        onClick = { },
+        onClick = { onSelect() },
         headlineContent = {
             Row(
                 modifier = Modifier.fillMaxWidth(),

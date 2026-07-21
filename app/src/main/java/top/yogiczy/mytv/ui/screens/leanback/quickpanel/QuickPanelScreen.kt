@@ -150,7 +150,7 @@ private fun LeanbackQuickPanelButton(
     var isFocused by remember { mutableStateOf(false) }
 
     androidx.tv.material3.Button(
-        onClick = { },
+        onClick = { onSelect() },
         shape = ButtonDefaults.shape(
             shape = MaterialTheme.shapes.small,
         ),
@@ -158,13 +158,7 @@ private fun LeanbackQuickPanelButton(
             .focusRequester(focusRequester)
             .onFocusChanged {
                 isFocused = it.isFocused || it.hasFocus
-            }
-            .handleLeanbackKeyEvents(
-                onSelect = {
-                    if (isFocused) onSelect()
-                    else focusRequester.requestFocus()
-                },
-            ),
+            },
     ) {
         androidx.tv.material3.Text(text = titleProvider())
     }

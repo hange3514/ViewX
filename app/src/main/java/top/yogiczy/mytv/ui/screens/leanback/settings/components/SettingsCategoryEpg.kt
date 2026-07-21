@@ -190,19 +190,10 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                .handleLeanbackKeyEvents(
-                                    onSelect = {
-                                        if (isFocused) onSelected(url)
-                                        else focusRequester.requestFocus()
-                                    },
-                                    onLongSelect = {
-                                        if (isFocused) onDeleted(url)
-                                        else focusRequester.requestFocus()
-                                    }
-                                ),
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                             selected = currentEpgXmlUrl == url,
-                            onClick = { },
+                            onClick = { onSelected(url) },
+                            onLongClick = { onDeleted(url) },
                             headlineContent = {
                                 androidx.tv.material3.Text(
                                     text = if (url == Constants.EPG_XML_URL) "默认节目单" else url,
@@ -229,15 +220,9 @@ private fun LeanbackSettingsEpgSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                .handleLeanbackKeyEvents(
-                                    onSelect = {
-                                        if (isFocused) showDialog = true
-                                        else focusRequester.requestFocus()
-                                    },
-                                ),
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                             selected = false,
-                            onClick = {},
+                            onClick = { showDialog = true },
                             headlineContent = {
                                 androidx.tv.material3.Text("添加其他节目单")
                             },

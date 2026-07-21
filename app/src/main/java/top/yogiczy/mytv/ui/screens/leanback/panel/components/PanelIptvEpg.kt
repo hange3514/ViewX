@@ -108,25 +108,7 @@ fun LeanbackPanelIptvEpgDialog(
                                 androidx.tv.material3.ListItem(
                                     modifier = Modifier
                                         .focusRequester(focusRequester)
-                                        .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                        .handleLeanbackKeyEvents(
-                                            onSelect = {
-                                                if (isReplayable) {
-                                                    onPlayCatchup(iptv, programme)
-                                                    onDismissRequest()
-                                                } else {
-                                                    when {
-                                                        iptv.catchupSource.isBlank() ->
-                                                            LeanbackToastState.I.showToast("该频道不支持回放")
-
-                                                        programme.startAt > CurrentTime.ms.value ->
-                                                            LeanbackToastState.I.showToast("节目尚未开始")
-
-                                                        else -> focusRequester.requestFocus()
-                                                    }
-                                                }
-                                            },
-                                        ),
+                                        .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                                     colors = ListItemDefaults.colors(
                                         containerColor = Color.Transparent,
                                         focusedContainerColor = MaterialTheme.colorScheme.onBackground,

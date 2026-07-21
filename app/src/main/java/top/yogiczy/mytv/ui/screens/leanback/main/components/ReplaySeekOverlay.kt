@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import java.text.SimpleDateFormat
@@ -44,6 +46,7 @@ fun LeanbackReplayControlBar(
     currentPositionMsProvider: () -> Long,
     isPausedProvider: () -> Boolean = { false },
     segmentInfoProvider: () -> String = { "" },
+    onTap: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val visible = visibleProvider()
@@ -97,6 +100,8 @@ fun LeanbackReplayControlBar(
                             MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
                             shape = MaterialTheme.shapes.medium,
                         )
+                        // 触摸点按控制条 = 暂停/继续
+                        .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
                         .padding(horizontal = 24.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

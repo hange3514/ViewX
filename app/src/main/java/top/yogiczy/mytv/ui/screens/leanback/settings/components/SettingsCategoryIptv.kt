@@ -245,19 +245,10 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                .handleLeanbackKeyEvents(
-                                    onSelect = {
-                                        if (isFocused) onSelected(source)
-                                        else focusRequester.requestFocus()
-                                    },
-                                    onLongSelect = {
-                                        if (isFocused) onDeleted(source)
-                                        else focusRequester.requestFocus()
-                                    },
-                                ),
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                             selected = currentIptvSource == source,
-                            onClick = { },
+                            onClick = { onSelected(source) },
+                            onLongClick = { onDeleted(source) },
                             headlineContent = {
                                 androidx.tv.material3.Text(
                                     text = if (source == Constants.IPTV_SOURCE_URL) "默认直播源（网络需要支持ipv6）" else source,
@@ -284,15 +275,9 @@ private fun LeanbackSettingsIptvSourceHistoryDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                .handleLeanbackKeyEvents(
-                                    onSelect = {
-                                        if (isFocused) showDialog = true
-                                        else focusRequester.requestFocus()
-                                    },
-                                ),
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                             selected = false,
-                            onClick = {},
+                            onClick = { showDialog = true },
                             headlineContent = {
                                 androidx.tv.material3.Text("添加其他直播源")
                             },
@@ -390,25 +375,16 @@ private fun LeanbackSettingsIptvGroupVisibleDialog(
                         androidx.tv.material3.ListItem(
                             modifier = Modifier
                                 .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-                                .handleLeanbackKeyEvents(
-                                    onSelect = {
-                                        if (isFocused) {
-                                            changed = true
-                                            // 直接从 SP（唯一事实源）读取当前集合再改，
-                                            // 不能用组合时捕获的 hiddenGroups：
-                                            // 其他项修改后本项捕获的集合已过期，会互相覆盖
-                                            val current = SP.iptvSourceHiddenGroupList
-                                            settingsViewModel.iptvSourceHiddenGroupList =
-                                                if (groupName in current) current - groupName
-                                                else current + groupName
-                                        } else {
-                                            focusRequester.requestFocus()
-                                        }
-                                    },
-                                ),
+                                .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
                             selected = false,
-                            onClick = { },
+                            // 触摸/遥控器统一点按切换；直接从 SP 读写避免捕获过期集合
+                            onClick = {
+                                changed = true
+                                val current = SP.iptvSourceHiddenGroupList
+                                settingsViewModel.iptvSourceHiddenGroupList =
+                                    if (groupName in current) current - groupName
+                                    else current + groupName
+                            },
                             headlineContent = {
                                 androidx.tv.material3.Text(
                                     text = groupName,

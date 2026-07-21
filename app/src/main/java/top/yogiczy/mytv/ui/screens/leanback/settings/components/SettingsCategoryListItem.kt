@@ -42,7 +42,13 @@ fun LeanbackSettingsCategoryListItem(
 
     androidx.tv.material3.ListItem(
         selected = false,
-        onClick = { },
+        // 触摸与遥控器 OK 统一走 onClick（tv 组件内部已处理按键点击），
+        // 不再走 handleLeanbackKeyEvents，避免遥控器下双触发
+        onClick = {
+            if (onSelected != null) onSelected()
+            else if (remoteConfig) showServerUrlDialog = true
+        },
+        onLongClick = { onLongSelected() },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp),
         ),
@@ -75,19 +81,7 @@ fun LeanbackSettingsCategoryListItem(
         supportingContent = { supportingContent?.let { androidx.tv.material3.Text(it) } },
         modifier = modifier
             .focusRequester(focusRequester)
-            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
-            .handleLeanbackKeyEvents(
-                onSelect = {
-                    if (isFocused) {
-                        if (onSelected != null) onSelected()
-                        else if (remoteConfig) showServerUrlDialog = true
-                    } else focusRequester.requestFocus()
-                },
-                onLongSelect = {
-                    if (isFocused) onLongSelected()
-                    else focusRequester.requestFocus()
-                },
-            ),
+            .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
     )
 
     LeanbackQrcodeDialog(

@@ -137,12 +137,12 @@ private fun LeanbackClassicPanelIptvGroupItem(
                     if (isFocused) {
                         onFocused(iptvGroup)
                     }
-                }
-                .handleLeanbackKeyEvents(
-                    onSelect = {
-                        focusRequester.requestFocus()
-                    },
-                ),
+                },
+            // 触摸点按直接选中分组并更新频道列表（遥控器靠焦点移动触发）
+            onClick = {
+                onFocused(iptvGroup)
+                focusRequester.requestFocus()
+            },
             colors = ListItemDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                 selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
@@ -150,7 +150,6 @@ private fun LeanbackClassicPanelIptvGroupItem(
                 ),
             ),
             selected = isSelectedProvider(),
-            onClick = { },
             headlineContent = {
                 Text(
                     text = iptvGroup.name,

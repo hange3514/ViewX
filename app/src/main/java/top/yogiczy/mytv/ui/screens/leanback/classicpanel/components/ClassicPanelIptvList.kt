@@ -208,18 +208,9 @@ private fun LeanbackClassicPanelIptvItem(
                         if (isFocused) {
                             onFocused()
                         }
-                    }
-                    .handleLeanbackKeyEvents(
-                        key = iptv.urlList.firstOrNull() ?: iptv.name,
-                        onSelect = {
-                            if (isFocused) onSelected()
-                            else focusRequester.requestFocus()
-                        },
-                        onLongSelect = {
-                            if (isFocused) onFavoriteToggle()
-                            else focusRequester.requestFocus()
-                        },
-                    ),
+                    },
+                onClick = { onSelected() },
+                onLongClick = { onFavoriteToggle() },
                 colors = ListItemDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.onBackground,
                     selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
@@ -227,7 +218,6 @@ private fun LeanbackClassicPanelIptvItem(
                     ),
                 ),
                 selected = isSelectedProvider(),
-                onClick = { },
                 headlineContent = {
                     Text(text = iptv.name, maxLines = 2)
                 },

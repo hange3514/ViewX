@@ -77,7 +77,12 @@ private fun LeanbackSettingsCategoryItem(
 
     androidx.tv.material3.ListItem(
         selected = isSelectedProvider(),
-        onClick = { },
+        // 触摸点按：切换分类；遥控器 OK：进入右侧设置项列表
+        onClick = {
+            onFocused()
+            if (isFocused) focusManager.moveFocus(FocusDirection.Right)
+            else focusRequester.requestFocus()
+        },
         leadingContent = { androidx.tv.material3.Icon(icon, title) },
         headlineContent = { androidx.tv.material3.Text(text = title) },
         modifier = modifier
@@ -87,13 +92,7 @@ private fun LeanbackSettingsCategoryItem(
                 if (isFocused) {
                     onFocused()
                 }
-            }
-            .handleLeanbackKeyEvents(
-                onSelect = {
-                    if (isFocused) focusManager.moveFocus(FocusDirection.Right)
-                    else focusRequester.requestFocus()
-                }
-            ),
+            },
     )
 }
 
