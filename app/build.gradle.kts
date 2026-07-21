@@ -22,8 +22,8 @@ android {
         applicationId = "top.yogiczy.mytv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.6.2"
+        versionCode = 13
+        versionName = "1.6.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

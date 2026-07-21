@@ -41,6 +41,26 @@ object ApkInstaller {
                 setDataAndType(uri, "application/vnd.android.package-archive")
             }
 
+            // MIUI 等 ROM 的安装器读取 FileProvider URI 时可能丢授权（SecurityException），
+            // 向所有能处理安装意图的包 + 已知安装器包显式授权（业界通用做法）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val installerPackages = (
+                        context.packageManager.queryIntentActivities(installIntent, 0)
+                            .map { it.activityInfo.packageName } + listOf(
+                            "com.miui.packageinstaller",
+                            "com.android.packageinstaller",
+                            "com.google.android.packageinstaller",
+                        )).toSet()
+                installerPackages.forEach { pkg ->
+                    try {
+                        context.grantUriPermission(
+                            pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+
             context.startActivity(installIntent)
             true
         } catch (ex: Exception) {
