@@ -395,9 +395,13 @@ private fun LeanbackSettingsIptvGroupVisibleDialog(
                                     onSelect = {
                                         if (isFocused) {
                                             changed = true
+                                            // 直接从 SP（唯一事实源）读取当前集合再改，
+                                            // 不能用组合时捕获的 hiddenGroups：
+                                            // 其他项修改后本项捕获的集合已过期，会互相覆盖
+                                            val current = SP.iptvSourceHiddenGroupList
                                             settingsViewModel.iptvSourceHiddenGroupList =
-                                                if (visible) hiddenGroups + groupName
-                                                else hiddenGroups - groupName
+                                                if (groupName in current) current - groupName
+                                                else current + groupName
                                         } else {
                                             focusRequester.requestFocus()
                                         }
