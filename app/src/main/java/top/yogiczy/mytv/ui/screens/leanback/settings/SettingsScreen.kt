@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,10 +26,12 @@ import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.screens.leanback.settings.components.LeanbackSettingsCategoryContent
 import top.yogiczy.mytv.ui.screens.leanback.settings.components.LeanbackSettingsCategoryList
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
 fun LeanbackSettingsScreen(
     modifier: Modifier = Modifier,
+    onClose: () -> Unit = {},
 ) {
     val childPadding = rememberLeanbackChildPadding()
     val focusRequester = remember { FocusRequester() }
@@ -54,11 +57,23 @@ fun LeanbackSettingsScreen(
         Row(
             horizontalArrangement = Arrangement.spacedBy(40.dp),
         ) {
-            LeanbackSettingsCategoryList(
-                modifier = Modifier.width(200.dp),
-                focusedCategoryProvider = { focusedCategory },
-                onFocused = { focusedCategory = it },
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // 触摸设备（平板/手机无返回键）的退出入口
+                androidx.tv.material3.Button(
+                    onClick = onClose,
+                    modifier = Modifier.tvTouchClickable(onClick = onClose),
+                ) {
+                    androidx.tv.material3.Text("← 返回")
+                }
+
+                LeanbackSettingsCategoryList(
+                    modifier = Modifier.width(200.dp),
+                    focusedCategoryProvider = { focusedCategory },
+                    onFocused = { focusedCategory = it },
+                )
+            }
 
             LeanbackSettingsCategoryContent(
                 focusedCategoryProvider = { focusedCategory },

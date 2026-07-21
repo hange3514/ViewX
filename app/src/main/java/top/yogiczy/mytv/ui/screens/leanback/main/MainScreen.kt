@@ -224,7 +224,7 @@ private fun LeanbackMainSettingsHandle(
             content()
 
             LeanbackVisible({ showSettings }) {
-                LeanbackSettingsScreen()
+                LeanbackSettingsScreen(onClose = { showSettings = false })
             }
         }
     }
