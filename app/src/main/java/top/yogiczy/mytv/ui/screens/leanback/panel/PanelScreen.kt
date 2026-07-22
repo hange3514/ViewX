@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,6 +48,7 @@ import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelPlayer
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
 fun LeanbackPanelScreen(
@@ -278,6 +281,23 @@ fun LeanbackPanelScreenBottomIptvList(
                 onToFavorite = onToFavorite,
                 onIptvFocused = onIptvFocused,
             )
+
+        // 触摸设备进入收藏列表的入口（遥控器是按上键）
+        if (!favoriteListVisible && iptvFavoriteEnable && favoriteList.isNotEmpty()) {
+            Text(
+                text = "收藏",
+                style = MaterialTheme.typography.labelMedium,
+                color = LocalContentColor.current.copy(alpha = 0.8f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .background(
+                        LocalContentColor.current.copy(alpha = 0.2f),
+                        MaterialTheme.shapes.small,
+                    )
+                    .tvTouchClickable(onClick = onToFavorite)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 

@@ -87,6 +87,8 @@ fun LeanbackPanelIptvItem(
             .tvTouchClickable(
                 onClick = { onIptvSelected() },
                 onLongClick = { onIptvFavoriteToggle() },
+                // 双击查看节目单（遥控器是按菜单键）
+                onDoubleClick = { onShowEpg() },
             )
             .handleLeanbackKeyEvents(
                 // 菜单键查看节目单仍走按键处理（tv 组件没有对应回调）

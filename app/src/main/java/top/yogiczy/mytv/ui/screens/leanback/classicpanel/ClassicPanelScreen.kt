@@ -267,6 +267,14 @@ private fun LeanbackClassicPanelScreenContent(
             remember(focusedIptvFocusRequester) { { focusedIptvFocusRequester } }
 
         LeanbackVisible(epgListVisibleProvider) {
+            // 触摸设备无左方向键，提供返回频道列表的入口
+            LeanbackClassicPanelVerticalTip(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.background.copy(0.7f))
+                    .padding(horizontal = 4.dp),
+                text = "返回",
+                onTap = { epgListVisible = false },
+            )
             LeanbackClassicPanelEpgList(
                 iptvProvider = focusedIptvProvider,
                 epgProvider = focusedIptvEpgProvider,

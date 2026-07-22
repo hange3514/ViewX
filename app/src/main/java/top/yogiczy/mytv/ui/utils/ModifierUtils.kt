@@ -220,14 +220,16 @@ fun Modifier.handleLeanbackUserAction(onHandle: () -> Unit) =
 
 /**
  * tv.material3 组件的 onClick/onLongClick 只响应遥控器按键，不响应触摸。
- * 触摸设备（平板/手机）上用本修饰符补齐点按/长按手势，与遥控器行为一致。
+ * 触摸设备（平板/手机）上用本修饰符补齐点按/长按/双击手势，与遥控器行为一致。
  */
 fun Modifier.tvTouchClickable(
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
 ): Modifier = pointerInput(Unit) {
     detectTapGestures(
         onTap = { onClick() },
         onLongPress = onLongClick?.let { handler -> { handler() } },
+        onDoubleTap = onDoubleClick?.let { handler -> { handler() } },
     )
 }

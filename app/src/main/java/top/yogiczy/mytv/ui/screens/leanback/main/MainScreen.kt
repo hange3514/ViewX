@@ -44,6 +44,7 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
 import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
 fun LeanbackMainScreen(
@@ -215,6 +216,7 @@ private fun LeanbackMainSettingsHandle(
             modifier = modifier
                 .focusRequester(focusRequester)
                 .focusable()
+                .tvTouchClickable(onDoubleClick = { showSettings = true })
                 .handleLeanbackKeyEvents(
                     onSettings = {
                         showSettings = true

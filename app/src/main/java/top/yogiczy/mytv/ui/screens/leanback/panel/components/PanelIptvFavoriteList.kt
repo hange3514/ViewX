@@ -37,6 +37,7 @@ import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import kotlin.math.max
 import kotlin.math.min
 
@@ -76,7 +77,12 @@ fun LeanbackPanelIptvFavoriteList(
     }
 
     Column(modifier = modifier) {
-        Row(modifier = Modifier.padding(start = childPadding.start)) {
+        Row(
+            modifier = Modifier
+                .padding(start = childPadding.start)
+                // 触摸设备点按标题返回分组列表（遥控器按上键）
+                .tvTouchClickable(onClick = { onClose() }),
+        ) {
             CompositionLocalProvider(
                 LocalTextStyle provides MaterialTheme.typography.labelMedium,
             ) {
@@ -85,6 +91,11 @@ fun LeanbackPanelIptvFavoriteList(
                 Text(
                     text = "${iptvList.size}个频道",
                     color = LocalContentColor.current.copy(alpha = 0.8f),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "(点按返回)",
+                    color = LocalContentColor.current.copy(alpha = 0.5f),
                 )
             }
         }
