@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,17 +17,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -47,6 +51,7 @@ fun LeanbackReplayControlBar(
     isPausedProvider: () -> Boolean = { false },
     segmentInfoProvider: () -> String = { "" },
     onTap: () -> Unit = {},
+    onSeekTo: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val visible = visibleProvider()
@@ -136,25 +141,86 @@ fun LeanbackReplayControlBar(
                         )
                     }
 
-                    // 第二行：进度条
-                    LinearProgressIndicator(
-                        progress = { progress },
+                    // 第二行：进度条（触屏可拖拽/点按定位）
+                    var dragFraction by remember { mutableStateOf<Float?>(null) }
+                    val shownFraction = dragFraction ?: progress
+                    val shownPositionMs = (shownFraction * duration).toLong()
+
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp),
-                    )
+                            .height(16.dp)
+                            // 拖拽进度条：拖动时预览，松手后定位
+                            .pointerInput(duration) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { offset ->
+                                        dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                    },
+                                    onDragEnd = {
+                                        dragFraction?.let { onSeekTo((it * duration).toLong()) }
+                                        dragFraction = null
+                                    },
+                                    onDragCancel = { dragFraction = null },
+                                ) { change, _ ->
+                                    change.consume()
+                                    dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                }
+                            }
+                            // 点按进度条直接定位
+                            .pointerInput(duration) {
+                                detectTapGestures { offset ->
+                                    onSeekTo(((offset.x / size.width).coerceIn(0f, 1f) * duration).toLong())
+                                }
+                            },
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        // 轨道
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                                    MaterialTheme.shapes.small,
+                                ),
+                        )
+                        // 已播放部分
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(shownFraction)
+                                .height(6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onBackground,
+                                    MaterialTheme.shapes.small,
+                                ),
+                        )
+                        // 拖动手柄
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(shownFraction)
+                                .height(16.dp),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(12.dp)
+                                    .background(MaterialTheme.colorScheme.onBackground),
+                            )
+                        }
+                    }
 
                     // 第三行：相对进度 + 绝对时刻
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "${formatDuration(current)} / ${formatDuration(duration)}",
+                            text = "${formatDuration(shownPositionMs)} / ${formatDuration(duration)}",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier
                                 .weight(1f)
                                 .alpha(0.8f),
                         )
                         Text(
-                            text = timeFormat.format(programme.startAt + current),
+                            text = timeFormat.format(programme.startAt + shownPositionMs),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.alpha(0.8f),
                         )

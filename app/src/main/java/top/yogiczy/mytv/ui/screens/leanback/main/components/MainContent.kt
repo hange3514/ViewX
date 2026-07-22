@@ -459,6 +459,12 @@ fun LeanbackMainContent(
             currentPositionMsProvider = { mainContentState.replayCurrentPositionMs },
             isPausedProvider = remember { { mainContentState.isReplayPaused } },
             onTap = remember { { mainContentState.toggleReplayPause() } },
+            onSeekTo = remember {
+                { ms: Long ->
+                    mainContentState.seekReplayToPosition(ms)
+                    showReplayBar()
+                }
+            },
             segmentInfoProvider = remember {
                 {
                     val programme = mainContentState.replayProgramme

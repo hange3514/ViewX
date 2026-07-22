@@ -467,6 +467,16 @@ class LeanbackMainContentState(
     }
 
     /**
+     * 回放时快进/快退到绝对位置（距片段开头 targetMs 毫秒），供触屏拖拽进度条使用
+     */
+    fun seekReplayToPosition(targetMs: Long) {
+        if (!_isReplayMode || _replayProgramme == null) return
+        val now = System.currentTimeMillis()
+        val currentMs = _replayCurrentPositionMs + (now - _replayPositionBaseTime)
+        seekReplay(targetMs - currentMs)
+    }
+
+    /**
      * 回放时快进/快退
      *
      * 大多数 IPTV 回放源通过改变 `playseek` 时间窗口来定位，播放器自身的 seek 往往无效。
