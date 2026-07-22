@@ -465,6 +465,7 @@ fun LeanbackMainContent(
                     showReplayBar()
                 }
             },
+            onExitReplay = remember { { mainContentState.exitReplayMode() } },
             segmentInfoProvider = remember {
                 {
                     val programme = mainContentState.replayProgramme

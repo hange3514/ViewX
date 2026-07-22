@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.entities.EpgProgramme
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -52,6 +53,7 @@ fun LeanbackReplayControlBar(
     segmentInfoProvider: () -> String = { "" },
     onTap: () -> Unit = {},
     onSeekTo: (Long) -> Unit = {},
+    onExitReplay: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val visible = visibleProvider()
@@ -133,6 +135,18 @@ fun LeanbackReplayControlBar(
                                 modifier = Modifier.alpha(0.8f),
                             )
                         }
+                        // 触摸设备无返回键，提供退出回放入口（遥控器双击返回不受影响）
+                        Text(
+                            text = "退出回放",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .background(
+                                    LocalContentColor.current.copy(alpha = 0.2f),
+                                    MaterialTheme.shapes.small,
+                                )
+                                .tvTouchClickable(onClick = onExitReplay)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
                         Text(
                             text = "${shortTimeFormat.format(programme.startAt)} ~ " +
                                     shortTimeFormat.format(programme.endAt),
