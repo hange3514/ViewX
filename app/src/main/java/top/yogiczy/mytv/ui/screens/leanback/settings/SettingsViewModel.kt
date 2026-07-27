@@ -82,6 +82,14 @@ class LeanbackSettingsViewModel : ViewModel() {
             SP.videoPlayerEngine = value
         }
 
+    private var _videoPlayerVlcHardwareDecode by mutableStateOf(SP.videoPlayerVlcHardwareDecode)
+    var videoPlayerVlcHardwareDecode: Boolean
+        get() = _videoPlayerVlcHardwareDecode
+        set(value) {
+            _videoPlayerVlcHardwareDecode = value
+            SP.videoPlayerVlcHardwareDecode = value
+        }
+
     private var _iptvSourceHiddenGroupList by mutableStateOf(SP.iptvSourceHiddenGroupList)
     var iptvSourceHiddenGroupList: Set<String>
         get() = _iptvSourceHiddenGroupList

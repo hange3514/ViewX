@@ -3,6 +3,7 @@ package top.yogiczy.mytv.ui.screens.leanback.settings.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,26 @@ fun LeanbackSettingsCategoryVideoPlayer(
                         }
                     LeanbackToastState.I.showToast("播放器内核已切换，正在刷新...")
                     LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                },
+            )
+        }
+
+        item {
+            LeanbackSettingsCategoryListItem(
+                headlineContent = "VLC 硬解",
+                supportingContent = "使用 VLC 内核时，HEVC 花屏可尝试关闭硬解改用软件解码（下次换台生效）",
+                trailingContent = {
+                    Switch(
+                        checked = settingsViewModel.videoPlayerVlcHardwareDecode,
+                        onCheckedChange = null
+                    )
+                },
+                onSelected = {
+                    settingsViewModel.videoPlayerVlcHardwareDecode =
+                        !settingsViewModel.videoPlayerVlcHardwareDecode
+                    LeanbackToastState.I.showToast(
+                        if (settingsViewModel.videoPlayerVlcHardwareDecode) "已开启硬解" else "已切换软件解码，换台后生效"
+                    )
                 },
             )
         }

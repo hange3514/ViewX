@@ -126,6 +126,9 @@ object SP {
         /** 播放器 内核 */
         VIDEO_PLAYER_ENGINE,
 
+        /** VLC 内核硬件解码 */
+        VIDEO_PLAYER_VLC_HW_DECODE,
+
         /** 播放器 画面比例 */
         VIDEO_PLAYER_ASPECT_RATIO,
     }
@@ -308,6 +311,11 @@ object SP {
             sp.getInt(KEY.VIDEO_PLAYER_ENGINE.name, VideoPlayerEngine.MEDIA3.value)
         )
         set(value) = sp.edit().putInt(KEY.VIDEO_PLAYER_ENGINE.name, value.value).apply()
+
+    /** VLC 内核硬件解码（关闭则强制软件解码，HEVC 硬解花屏时可尝试） */
+    var videoPlayerVlcHardwareDecode: Boolean
+        get() = sp.getBoolean(KEY.VIDEO_PLAYER_VLC_HW_DECODE.name, true)
+        set(value) = sp.edit().putBoolean(KEY.VIDEO_PLAYER_VLC_HW_DECODE.name, value).apply()
 
     /** 播放器 画面比例 */
     var videoPlayerAspectRatio: VideoPlayerAspectRatio

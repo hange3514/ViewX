@@ -8,6 +8,7 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
+import top.yogiczy.mytv.ui.utils.SP
 
 /**
  * VLC 播放器内核。
@@ -98,6 +99,11 @@ class LeanbackVlcVideoPlayer(
         val mp = mediaPlayer ?: return
         mp.stop()
         val media = Media(libVLC ?: return, Uri.parse(url))
+        // 硬解花屏的设备可在设置里关闭硬解，强制软件解码
+        media.setHWDecoderEnabled(
+            SP.videoPlayerVlcHardwareDecode,
+            SP.videoPlayerVlcHardwareDecode,
+        )
         mp.media = media
         media.release()
         surfaceView?.let { attachSurface(it) }
