@@ -20,8 +20,10 @@ import top.yogiczy.mytv.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
+import top.yogiczy.mytv.utils.Logger
 
 class LeanbackMainViewModel : ViewModel() {
+    private val log = Logger.create(javaClass.simpleName)
     private val iptvRepository = IptvRepository()
     private val epgRepository = EpgRepository()
 
@@ -87,10 +89,15 @@ class LeanbackMainViewModel : ViewModel() {
             val filteredChannels = iptvGroupList.iptvList.map { it.channelName }
             val filteredChannelIds = iptvGroupList.iptvList.map { it.tvgId }.filter { it.isNotBlank() }
 
+            // 源内整合了节目单（#EXTM3U 的 x-tvg-url）时优先使用，否则回退到设置中的地址
+            val sourceEpgUrl = iptvRepository.getSourceEpgUrl(SP.iptvSourceUrl, SP.iptvSourceCacheTime)
+            val xmlUrl = sourceEpgUrl ?: SP.epgXmlUrl
+            log.i(if (sourceEpgUrl != null) "使用源内整合节目单: $xmlUrl" else "使用设置中节目单: $xmlUrl")
+
             flow {
                 emit(
                     epgRepository.getEpgList(
-                        xmlUrl = SP.epgXmlUrl,
+                        xmlUrl = xmlUrl,
                         filteredChannels = filteredChannels,
                         filteredChannelIds = filteredChannelIds,
                         refreshTimeThreshold = SP.epgRefreshTimeThreshold,
