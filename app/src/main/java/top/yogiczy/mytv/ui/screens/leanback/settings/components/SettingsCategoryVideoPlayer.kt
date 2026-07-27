@@ -11,7 +11,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import top.yogiczy.mytv.ui.screens.leanback.settings.LeanbackSettingsViewModel
+import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.utils.humanizeMs
 import kotlin.math.max
@@ -26,6 +28,25 @@ fun LeanbackSettingsCategoryVideoPlayer(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 10.dp),
     ) {
+        item {
+            LeanbackSettingsCategoryListItem(
+                headlineContent = "播放器内核",
+                supportingContent = "部分设备 HEVC 硬解花屏时切换 VLC 试试（切换后自动刷新生效）",
+                trailingContent = when (settingsViewModel.videoPlayerEngine) {
+                    SP.VideoPlayerEngine.MEDIA3 -> "Media3"
+                    SP.VideoPlayerEngine.VLC -> "VLC"
+                },
+                onSelected = {
+                    settingsViewModel.videoPlayerEngine =
+                        SP.VideoPlayerEngine.entries.let {
+                            it[(it.indexOf(settingsViewModel.videoPlayerEngine) + 1) % it.size]
+                        }
+                    LeanbackToastState.I.showToast("播放器内核已切换，正在刷新...")
+                    LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                },
+            )
+        }
+
         item {
             LeanbackSettingsCategoryListItem(
                 headlineContent = "全局画面比例",

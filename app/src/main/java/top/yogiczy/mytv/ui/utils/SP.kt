@@ -123,6 +123,9 @@ object SP {
         /** 播放器 加载超时 */
         VIDEO_PLAYER_LOAD_TIMEOUT,
 
+        /** 播放器 内核 */
+        VIDEO_PLAYER_ENGINE,
+
         /** 播放器 画面比例 */
         VIDEO_PLAYER_ASPECT_RATIO,
     }
@@ -299,6 +302,13 @@ object SP {
         get() = sp.getLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, Constants.VIDEO_PLAYER_LOAD_TIMEOUT)
         set(value) = sp.edit().putLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, value).apply()
 
+    /** 播放器 内核 */
+    var videoPlayerEngine: VideoPlayerEngine
+        get() = VideoPlayerEngine.fromValue(
+            sp.getInt(KEY.VIDEO_PLAYER_ENGINE.name, VideoPlayerEngine.MEDIA3.value)
+        )
+        set(value) = sp.edit().putInt(KEY.VIDEO_PLAYER_ENGINE.name, value.value).apply()
+
     /** 播放器 画面比例 */
     var videoPlayerAspectRatio: VideoPlayerAspectRatio
         get() = VideoPlayerAspectRatio.fromValue(
@@ -339,6 +349,20 @@ object SP {
         companion object {
             fun fromValue(value: Int): AppDeviceDisplayType {
                 return entries.firstOrNull { it.value == value } ?: LEANBACK
+            }
+        }
+    }
+
+    enum class VideoPlayerEngine(val value: Int) {
+        /** Media3(ExoPlayer) */
+        MEDIA3(0),
+
+        /** VLC（HEVC 等格式弱硬解设备容错更好） */
+        VLC(1);
+
+        companion object {
+            fun fromValue(value: Int): VideoPlayerEngine {
+                return entries.firstOrNull { it.value == value } ?: MEDIA3
             }
         }
     }
