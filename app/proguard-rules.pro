@@ -19,5 +19,3 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
-# VLC (libvlc)：JNI 通过反射调用 Java 类与方法，R8 混淆/裁剪后 native 侧会崩溃
--keep class org.videolan.** { *; }

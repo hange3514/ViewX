@@ -22,8 +22,8 @@ android {
         applicationId = "top.yogiczy.mytv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 32
-        versionName = "2.4.3"
+        versionCode = 33
+        versionName = "2.4.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -101,7 +101,6 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.rtsp)
-    implementation("org.videolan.android:libvlc-all:4.0.0-eap25")
     // 序列化
     implementation(libs.kotlinx.serialization)
 

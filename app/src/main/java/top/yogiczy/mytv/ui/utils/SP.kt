@@ -123,12 +123,6 @@ object SP {
         /** 播放器 加载超时 */
         VIDEO_PLAYER_LOAD_TIMEOUT,
 
-        /** 播放器 内核 */
-        VIDEO_PLAYER_ENGINE,
-
-        /** VLC 内核硬件解码 */
-        VIDEO_PLAYER_VLC_HW_DECODE,
-
         /** 播放器 画面比例 */
         VIDEO_PLAYER_ASPECT_RATIO,
     }
@@ -305,18 +299,6 @@ object SP {
         get() = sp.getLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, Constants.VIDEO_PLAYER_LOAD_TIMEOUT)
         set(value) = sp.edit().putLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, value).apply()
 
-    /** 播放器 内核 */
-    var videoPlayerEngine: VideoPlayerEngine
-        get() = VideoPlayerEngine.fromValue(
-            sp.getInt(KEY.VIDEO_PLAYER_ENGINE.name, VideoPlayerEngine.MEDIA3.value)
-        )
-        set(value) = sp.edit().putInt(KEY.VIDEO_PLAYER_ENGINE.name, value.value).apply()
-
-    /** VLC 内核硬件解码（关闭则强制软件解码，HEVC 硬解花屏时可尝试） */
-    var videoPlayerVlcHardwareDecode: Boolean
-        get() = sp.getBoolean(KEY.VIDEO_PLAYER_VLC_HW_DECODE.name, true)
-        set(value) = sp.edit().putBoolean(KEY.VIDEO_PLAYER_VLC_HW_DECODE.name, value).apply()
-
     /** 播放器 画面比例 */
     var videoPlayerAspectRatio: VideoPlayerAspectRatio
         get() = VideoPlayerAspectRatio.fromValue(
@@ -357,20 +339,6 @@ object SP {
         companion object {
             fun fromValue(value: Int): AppDeviceDisplayType {
                 return entries.firstOrNull { it.value == value } ?: LEANBACK
-            }
-        }
-    }
-
-    enum class VideoPlayerEngine(val value: Int) {
-        /** Media3(ExoPlayer) */
-        MEDIA3(0),
-
-        /** VLC（HEVC 等格式弱硬解设备容错更好） */
-        VLC(1);
-
-        companion object {
-            fun fromValue(value: Int): VideoPlayerEngine {
-                return entries.firstOrNull { it.value == value } ?: MEDIA3
             }
         }
     }

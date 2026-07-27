@@ -18,8 +18,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackCompositeVideoPlayer
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
-import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVlcVideoPlayer
-import top.yogiczy.mytv.ui.utils.SP
 
 /**
  * 播放器状态
@@ -136,19 +134,14 @@ fun rememberLeanbackVideoPlayerState(
     val latestAspectRatioProvider by rememberUpdatedState(defaultAspectRatioProvider)
     val state = remember {
         LeanbackVideoPlayerState(
-            // 播放器内核：Media3 或 VLC（切换内核通过软重启重建后生效）
-            if (SP.videoPlayerEngine == SP.VideoPlayerEngine.VLC) {
-                LeanbackVlcVideoPlayer(context, coroutineScope)
-            } else {
-                LeanbackCompositeVideoPlayer(
-                    context = context,
-                    coroutineScope = coroutineScope,
-                    minBufferMs = minBufferMs,
-                    maxBufferMs = maxBufferMs,
-                    bufferForPlaybackMs = bufferForPlaybackMs,
-                    bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
-                )
-            },
+            LeanbackCompositeVideoPlayer(
+                context = context,
+                coroutineScope = coroutineScope,
+                minBufferMs = minBufferMs,
+                maxBufferMs = maxBufferMs,
+                bufferForPlaybackMs = bufferForPlaybackMs,
+                bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
+            ),
             defaultAspectRatioProvider = { latestAspectRatioProvider() },
         )
     }

@@ -62,11 +62,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".VlcTestActivity"
-            android:exported="true"
-            android:theme="@style/Theme.MyTV" />
-
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
