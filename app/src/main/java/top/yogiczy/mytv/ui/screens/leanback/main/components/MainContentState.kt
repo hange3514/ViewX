@@ -384,6 +384,18 @@ class LeanbackMainContentState(
     }
 
     /**
+     * 回放地址解析：catchup="append" 形式的源，catchup-source 是拼接到播放地址后的
+     * 相对后缀（如 ?playbackbegin=...&playbackend=...），需要拼接当前线路地址；
+     * 完整 URL（含 ://）则直接使用。两种源的回放方式对用户无感兼容
+     */
+    private fun resolveCatchupUrl(catchupUrl: String): String {
+        if (catchupUrl.isBlank()) return ""
+        if (catchupUrl.contains("://")) return catchupUrl
+        val baseUrl = _currentIptv.urlList.getOrNull(_currentIptvUrlIdx) ?: return ""
+        return baseUrl + catchupUrl
+    }
+
+    /**
      * 播放节目回放
      */
     fun playCatchup(iptv: Iptv, programme: EpgProgramme) {
@@ -395,11 +407,11 @@ class LeanbackMainContentState(
         if (programme.startAt > now) return
         val catchupEndAt = minOf(programme.endAt, now)
 
-        val catchupUrl = CatchupUrlBuilder.build(
+        val catchupUrl = resolveCatchupUrl(CatchupUrlBuilder.build(
             iptv.catchupSource,
             programme.startAt,
             catchupEndAt,
-        )
+        ))
         if (catchupUrl.isBlank()) return
 
         _isPanelVisible = false
@@ -562,11 +574,11 @@ class LeanbackMainContentState(
         val now = System.currentTimeMillis()
         val catchupEndAt = minOf(programme.endAt, now)
         val newStartAt = programme.startAt + targetMs
-        val catchupUrl = CatchupUrlBuilder.build(
+        val catchupUrl = resolveCatchupUrl(CatchupUrlBuilder.build(
             _currentIptv.catchupSource,
             newStartAt,
             catchupEndAt,
-        )
+        ))
         if (catchupUrl.isBlank()) return
 
         _replayProgramme = programme

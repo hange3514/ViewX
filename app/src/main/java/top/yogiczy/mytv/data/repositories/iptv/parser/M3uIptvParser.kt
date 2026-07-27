@@ -15,6 +15,15 @@ class M3uIptvParser : IptvParser {
         val lines = data.split("\r\n", "\n")
         val iptvList = mutableListOf<IptvResponseItem>()
 
+        // #EXTM3U 全局头可声明默认回放方式（如 catchup="append" catchup-source="?playbackbegin=..."），
+        // 频道行未声明时继承；频道行声明了则以频道行为准
+        var globalCatchup = ""
+        var globalCatchupSource = ""
+        lines.firstOrNull { it.startsWith("#EXTM3U") }?.let { header ->
+            globalCatchup = CATCHUP_REGEX.find(header)?.groupValues?.get(1) ?: ""
+            globalCatchupSource = CATCHUP_SOURCE_REGEX.find(header)?.groupValues?.get(1) ?: ""
+        }
+
         lines.forEachIndexed { index, line ->
             if (!line.startsWith("#EXTINF")) return@forEachIndexed
 
@@ -38,8 +47,8 @@ class M3uIptvParser : IptvParser {
                     tvgId = tvgId.trim(),
                     groupName = groupName.trim(),
                     url = url,
-                    catchup = catchup.trim(),
-                    catchupSource = catchupSource.trim(),
+                    catchup = catchup.trim().ifBlank { globalCatchup.trim() },
+                    catchupSource = catchupSource.trim().ifBlank { globalCatchupSource.trim() },
                     catchupDays = catchupDays,
                 )
             )
