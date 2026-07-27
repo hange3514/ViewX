@@ -38,6 +38,8 @@ class LeanbackVlcVideoPlayer(
                 ),
             )
             mediaPlayer = MediaPlayer(libVLC!!).apply {
+                // 视频最佳适配 Surface，避免不全屏
+                setVideoScale(MediaPlayer.ScaleType.SURFACE_BEST_FIT)
                 setEventListener { event -> handleEvent(event) }
             }
         }
@@ -49,6 +51,11 @@ class LeanbackVlcVideoPlayer(
         if (!vout.areViewsAttached()) {
             vout.setVideoView(view)
             vout.attachViews()
+        }
+        // detach/reattach（如主备交换）后 VLC 内部输出尺寸会失效，
+        // 必须重设窗口大小，否则视频只在一个小区域里渲染（不全屏）
+        if (view.width > 0 && view.height > 0) {
+            vout.setWindowSize(view.width, view.height)
         }
     }
 
@@ -133,6 +140,12 @@ class LeanbackVlcVideoPlayer(
     override fun setVideoSurfaceView(surfaceView: SurfaceView) {
         this.surfaceView = surfaceView
         attachSurface(surfaceView)
+        // Surface 尺寸变化（布局完成/换台旋转）时同步 VLC 输出窗口
+        surfaceView.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            if (v.width > 0 && v.height > 0) {
+                mediaPlayer?.vlcVout?.setWindowSize(v.width, v.height)
+            }
+        }
     }
 
     override fun clearVideoSurface() {
