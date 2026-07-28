@@ -217,7 +217,7 @@ fun LeanbackSettingsCategoryIptv(
                     settingsViewModel.iptvPlayableHostList = emptySet()
                     coroutineScope.launch {
                         IptvRepository().clearCache()
-                        top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearCache()
+                        top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearAllCache()
                     }
                     LeanbackToastState.I.showToast("清除缓存成功")
                 },

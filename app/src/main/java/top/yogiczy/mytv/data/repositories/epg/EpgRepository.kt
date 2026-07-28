@@ -178,6 +178,15 @@ class EpgRepository : FileCacheRepository("epg.json") {
         return@withContext EpgList(result)
     }
 
+    /**
+     * 清空全部节目单缓存：解析缓存（epg.json）+ 原始 xml 缓存（epg.xml）。
+     * 只清 epg.json 的话，断网时 EPG 会从陈旧 xml 兜底"复活"，与清除语义不符
+     */
+    fun clearAllCache() {
+        clearCache()
+        epgXmlRepository.clearCache()
+    }
+
     suspend fun getEpgList(
         xmlUrl: String,
         filteredChannels: List<String> = emptyList(),

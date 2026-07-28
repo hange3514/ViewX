@@ -163,7 +163,7 @@ object HttpServer : Loggable() {
 
         if (SP.epgXmlUrl != epgXmlUrl) {
             SP.epgXmlUrl = epgXmlUrl
-            EpgRepository().clearCache()
+            EpgRepository().clearAllCache()
             showToast("节目单地址已更新，正在刷新...")
             LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
         }

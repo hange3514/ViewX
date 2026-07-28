@@ -215,7 +215,8 @@ fun LeanbackMainContent(
         flipJob.value?.cancel()
         flipJob.value = coroutineScope.launch {
             delay(400)
-            while (isActive) {
+            // 浮层打开（如连翻中按 OK 出面板）即停止，防止失控连翻
+            while (isActive && noOverlayVisible) {
                 if (direction > 0) mainContentState.changeCurrentIptvToNext()
                 else mainContentState.changeCurrentIptvToPrev()
                 delay(600)
@@ -359,7 +360,7 @@ fun LeanbackMainContent(
             settingsViewModel.iptvPlayableHostList = emptySet()
             coroutineScope.launch {
                 top.yogiczy.mytv.data.repositories.iptv.IptvRepository().clearCache()
-                top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearCache()
+                top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearAllCache()
             }
             LeanbackToastState.I.showToast("清除缓存成功")
         }
@@ -458,10 +459,10 @@ fun LeanbackMainContent(
                 .focusable()
                 .handleLeanbackKeyEvents(
                     onUp = onKeyUp,
-                    onUpDown = { startContinuousFlip(-1) },
+                    onUpDown = { startContinuousFlip(if (channelChangeFlipProvider()) 1 else -1) },
                     onUpUp = { stopContinuousFlip() },
                     onDown = onKeyDown,
-                    onDownDown = { startContinuousFlip(1) },
+                    onDownDown = { startContinuousFlip(if (channelChangeFlipProvider()) -1 else 1) },
                     onDownUp = { stopContinuousFlip() },
                     onLeft = onKeyLeft,
                     onLeftDown = { startContinuousSeek(-REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },

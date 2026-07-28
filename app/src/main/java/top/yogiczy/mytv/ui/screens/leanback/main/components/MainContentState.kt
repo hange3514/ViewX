@@ -90,6 +90,9 @@ class LeanbackMainContentState(
 
     private var _replayProgressJob by mutableStateOf<Job?>(null)
 
+    /** 退后台时冻结回放进度累加（后台墙钟照走，防止位置虚涨） */
+    private var _replayProgressFrozen = false
+
     private var _isPanelVisible by mutableStateOf(false)
     var isPanelVisible
         get() = _isPanelVisible
@@ -144,7 +147,9 @@ class LeanbackMainContentState(
     }
 
     private fun onActiveReady() {
-        cutoffRetryCount = 0
+        // 重试计数只在稳定播放超过一分钟时才重置；
+        // 抖动流（ready→卡死→ready）不再每次 ready 都清零导致无限重连
+        if (SystemClock.uptimeMillis() - lastCutoffAt > 60_000) cutoffRetryCount = 0
         cutoffRetryJob?.cancel()
         coroutineScope.launch {
             val name = _currentIptv.name
@@ -173,6 +178,9 @@ class LeanbackMainContentState(
 
         if (_currentIptvUrlIdx < _currentIptv.urlList.size - 1) {
             changeCurrentIptv(_currentIptv, _currentIptvUrlIdx + 1)
+        } else {
+            // 全部线路都失败：隐藏临时信息条，让错误 UI 展示，不再挂着
+            _isTempPanelVisible = false
         }
 
         // 从记忆中删除不可播放的域名
@@ -256,7 +264,8 @@ class LeanbackMainContentState(
      * 单次失败可能只是预测到的频道本身不可用，连续失败才说明设备解码能力受限
      */
     private fun onStandbyError(index: Int) {
-        playerContents[index] = null
+        // 出错待机的内容登记不清空——迟到的 error 可能属于上一次 prepare 的旧内容，
+        // 命中路径已有 error==null 守卫兜底，此处只累计降级计数
         _standbyErrorCount++
         if (_standbyErrorCount >= 3 && _dualStandbyAvailable) {
             log.d("待机播放器连续异常，降级为单方向预缓冲")
@@ -446,13 +455,16 @@ class LeanbackMainContentState(
 
     /**
      * 回放地址解析：catchup="append" 形式的源，catchup-source 是拼接到播放地址后的
-     * 相对后缀（如 ?playbackbegin=...&playbackend=...），需要拼接当前线路地址；
+     * 相对后缀（如 ?playbackbegin=...&playbackend=...），需要拼接**目标频道**的线路地址；
      * 完整 URL（含 ://）则直接使用。两种源的回放方式对用户无感兼容
      */
-    private fun resolveCatchupUrl(catchupUrl: String): String {
+    private fun resolveCatchupUrl(catchupUrl: String, iptv: Iptv): String {
         if (catchupUrl.isBlank()) return ""
         if (catchupUrl.contains("://")) return catchupUrl
-        val baseUrl = _currentIptv.urlList.getOrNull(_currentIptvUrlIdx) ?: return ""
+        val urlIdx = max(0, iptv.urlList.indexOfFirst {
+            SP.iptvPlayableHostList.contains(getUrlHost(it))
+        })
+        val baseUrl = iptv.urlList.getOrNull(urlIdx) ?: return ""
         return baseUrl + catchupUrl
     }
 
@@ -475,7 +487,7 @@ class LeanbackMainContentState(
             iptv.catchupSource,
             programme.startAt,
             catchupEndAt,
-        ))
+        ), iptv)
         if (catchupUrl.isBlank()) return
 
         _isPanelVisible = false
@@ -486,8 +498,17 @@ class LeanbackMainContentState(
         _replayCurrentPositionMs = 0L
         _replayPositionBaseTime = now
         startReplayProgressTracking()
+
+        // 目标频道可能与当前频道不同（从其他频道的节目单进回放）：
+        // 线路下标必须按目标频道重算，否则越界；append 型源的 base URL 也必须用目标频道
         _currentIptv = iptv
+        _currentIptvUrlIdx = max(0, iptv.urlList.indexOfFirst {
+            SP.iptvPlayableHostList.contains(getUrlHost(it))
+        })
         SP.iptvLastIptvIdx = iptvGroupList.iptvIdx(_currentIptv)
+
+        // 回放内容不等于直播内容，登记置空，避免翻台"命中"暂停住的旧回放流当直播放
+        playerContents[_activePlayerIndex] = null
 
         log.d("回放${iptv.name} - ${programme.title}: $catchupUrl")
         activePlayer.prepare(catchupUrl)
@@ -498,9 +519,8 @@ class LeanbackMainContentState(
         _replayProgressJob = coroutineScope.launch {
             while (isActive && _isReplayMode) {
                 delay(1000)
-                if (_isReplayPaused) {
-                    // 暂停时冻结进度：只刷新基准时间，不累加位置，
-                    // 否则恢复播放后位置虚高，seek 会跳错位置
+                if (_isReplayPaused || _replayProgressFrozen) {
+                    // 暂停/退后台时冻结进度：只刷新基准时间，不累加位置
                     _replayPositionBaseTime = System.currentTimeMillis()
                     continue
                 }
@@ -523,10 +543,15 @@ class LeanbackMainContentState(
     }
 
     /**
-     * 应用退到后台：暂停全部播放器（含待机），并取消断流退避重连
+     * 应用退到后台：暂停全部播放器（含待机），取消断流退避重连，冻结回放进度
      */
     fun pauseAllPlayers() {
         cutoffRetryJob?.cancel()
+        if (_isReplayMode && !_replayProgressFrozen) {
+            _replayCurrentPositionMs += System.currentTimeMillis() - _replayPositionBaseTime
+            _replayPositionBaseTime = System.currentTimeMillis()
+            _replayProgressFrozen = true
+        }
         playerStates.forEach { it.pause() }
     }
 
@@ -535,6 +560,8 @@ class LeanbackMainContentState(
      * 待机播放器保持冻结（避免 3 路并发解码），回放暂停状态不被打穿
      */
     fun resumeActivePlayer() {
+        _replayProgressFrozen = false
+        _replayPositionBaseTime = System.currentTimeMillis()
         if (_isReplayMode && _isReplayPaused) return
         activePlayer.play()
     }
@@ -659,7 +686,7 @@ class LeanbackMainContentState(
             _currentIptv.catchupSource,
             newStartAt,
             catchupEndAt,
-        ))
+        ), _currentIptv)
         if (catchupUrl.isBlank()) return
 
         _replayProgramme = programme

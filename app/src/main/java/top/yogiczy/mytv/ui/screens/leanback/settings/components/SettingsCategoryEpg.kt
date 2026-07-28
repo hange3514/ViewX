@@ -88,7 +88,7 @@ fun LeanbackSettingsCategoryEpg(
 
             LeanbackSettingsCategoryListItem(
                 headlineContent = "节目单刷新时间阈值",
-                supportingContent = "短按选择，长按设为0小时；时间不到${settingsViewModel.epgRefreshTimeThreshold}:00节目单将不会刷新",
+                supportingContent = "（当前版本始终刷新节目单，此项仅为兼容保留）",
                 trailingContent = "${settingsViewModel.epgRefreshTimeThreshold}小时",
                 onSelected = { showDialog = true },
                 onLongSelected = {
@@ -131,7 +131,7 @@ fun LeanbackSettingsCategoryEpg(
                     showDialog = false
                     if (settingsViewModel.epgXmlUrl != it) {
                         settingsViewModel.epgXmlUrl = it
-                        coroutineScope.launch { EpgRepository().clearCache() }
+                        coroutineScope.launch { EpgRepository().clearAllCache() }
                         // 与网页推送路径对齐：立即刷新节目单
                         LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
                         LeanbackToastState.I.showToast("节目单地址已切换，正在刷新...")
@@ -148,7 +148,7 @@ fun LeanbackSettingsCategoryEpg(
                 headlineContent = "清除缓存",
                 supportingContent = "短按清除节目单缓存文件",
                 onSelected = {
-                    coroutineScope.launch { EpgRepository().clearCache() }
+                    coroutineScope.launch { EpgRepository().clearAllCache() }
                     LeanbackToastState.I.showToast("清除缓存成功")
                 },
             )
