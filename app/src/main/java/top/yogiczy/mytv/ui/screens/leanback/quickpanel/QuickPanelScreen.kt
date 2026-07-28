@@ -40,6 +40,8 @@ import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelPlayer
 import top.yogiczy.mytv.ui.screens.leanback.panel.rememberPanelAutoCloseState
 import top.yogiczy.mytv.ui.screens.leanback.quickpanel.components.LeanbackQuickPanelIptvChannelsDialog
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
@@ -112,7 +114,7 @@ fun LeanbackQuickPanelScreen(
                 )
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
                 ) {
                     LeanbackQuickPanelActionMultipleChannels(
                         currentIptvProvider = currentIptvProvider,

@@ -2,6 +2,7 @@ package top.yogiczy.mytv.ui.screens.leanback.main.components
 
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -124,19 +125,27 @@ class LeanbackMainContentState(
                 if (index == _activePlayerIndex) onActiveReady() else onStandbyReady(state)
             }
             state.onError {
-                if (index == _activePlayerIndex) onActiveError() else onStandbyError()
+                if (index == _activePlayerIndex) onActiveError() else onStandbyError(index)
             }
             state.onCutoff {
                 if (index == _activePlayerIndex) onActiveCutoff()
             }
         }
+    }
 
+    /**
+     * 初始开播。从 remember 的组合期移到 LaunchedEffect 调用，
+     * 避免组合被放弃时已 prepare 的播放器无释放路径、早期事件丢失
+     */
+    fun start() {
         changeCurrentIptv(iptvGroupList.iptvList.getOrElse(SP.iptvLastIptvIdx) {
             iptvGroupList.firstOrNull()?.iptvList?.firstOrNull() ?: Iptv()
         })
     }
 
     private fun onActiveReady() {
+        cutoffRetryCount = 0
+        cutoffRetryJob?.cancel()
         coroutineScope.launch {
             val name = _currentIptv.name
             val urlIdx = _currentIptvUrlIdx
@@ -163,6 +172,10 @@ class LeanbackMainContentState(
         SP.iptvPlayableHostList -= failedUrlHost
     }
 
+    private var cutoffRetryCount = 0
+    private var lastCutoffAt = 0L
+    private var cutoffRetryJob: Job? = null
+
     private fun onActiveCutoff() {
         if (_isReplayMode && _replayProgramme != null) {
             val programme = _replayProgramme!!
@@ -178,7 +191,26 @@ class LeanbackMainContentState(
                 seekToProgramme(programme, positionMs.coerceIn(0, max(0, totalDuration)))
             }
         } else {
-            changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
+            // 直播断流：线性退避重试（1/2/3/4/5s），一分钟稳定则重置计数；
+            // 超过上限按播放错误处理（尝试切换线路或停在错误态），不再无限重连
+            val now = SystemClock.uptimeMillis()
+            if (now - lastCutoffAt > 60_000) cutoffRetryCount = 0
+            lastCutoffAt = now
+
+            if (cutoffRetryCount >= 5) {
+                log.d("断流重试超过上限，停止重连")
+                cutoffRetryCount = 0
+                onActiveError()
+                return
+            }
+            cutoffRetryCount++
+            val delayMs = cutoffRetryCount * 1000L
+            log.d("断流重连（第${cutoffRetryCount}次，${delayMs}ms 后）")
+            cutoffRetryJob?.cancel()
+            cutoffRetryJob = coroutineScope.launch {
+                delay(delayMs)
+                changeCurrentIptv(_currentIptv, _currentIptvUrlIdx)
+            }
         }
     }
 
@@ -188,6 +220,11 @@ class LeanbackMainContentState(
      */
     private fun onStandbyReady(state: LeanbackVideoPlayerState) {
         _standbyErrorCount = 0
+        // 连续成功说明设备扛得住，恢复双待机（曾降级过的话）
+        if (!_dualStandbyAvailable) {
+            log.d("待机播放器恢复稳定，重新启用双向预缓冲")
+            _dualStandbyAvailable = true
+        }
         coroutineScope.launch {
             delay(2000)
             // 期间若已被提升为活跃播放器则不处理
@@ -196,10 +233,12 @@ class LeanbackMainContentState(
     }
 
     /**
-     * 待机播放器异常：连续失败先降级为单待机（猜方向），再失败则完全停用。
+     * 待机播放器异常：清空其内容登记（避免换台"命中"一个已死播放器后无法恢复），
+     * 连续失败先降级为单待机（猜方向），再失败则完全停用。
      * 单次失败可能只是预测到的频道本身不可用，连续失败才说明设备解码能力受限
      */
-    private fun onStandbyError() {
+    private fun onStandbyError(index: Int) {
+        playerContents[index] = null
         _standbyErrorCount++
         if (_standbyErrorCount >= 3 && _dualStandbyAvailable) {
             log.d("待机播放器连续异常，降级为单方向预缓冲")
@@ -334,7 +373,8 @@ class LeanbackMainContentState(
 
         val hitIndex = playerContents.indexOfFirst { it != null && it == url }
         if (_prebufferAvailable && SP.iptvPrebufferEnable &&
-            hitIndex >= 0 && hitIndex != _activePlayerIndex
+            hitIndex >= 0 && hitIndex != _activePlayerIndex &&
+            playerStates[hitIndex].error == null // 处于错误态的播放器不走捷径，改走正常 prepare
         ) {
             // 命中预缓冲：交换主备角色，待机播放器直接出画面（秒切）；
             // 旧活跃播放器保留刚切走的频道内容，往回翻台也能秒切
@@ -456,6 +496,22 @@ class LeanbackMainContentState(
         if (!_isReplayMode) return
         _isReplayPaused = !_isReplayPaused
         if (_isReplayPaused) activePlayer.pause() else activePlayer.play()
+    }
+
+    /**
+     * 应用退到后台：暂停全部播放器（含待机）
+     */
+    fun pauseAllPlayers() {
+        playerStates.forEach { it.pause() }
+    }
+
+    /**
+     * 应用回到前台：只恢复活跃播放器；
+     * 待机播放器保持冻结（避免 3 路并发解码），回放暂停状态不被打穿
+     */
+    fun resumeActivePlayer() {
+        if (_isReplayMode && _isReplayPaused) return
+        activePlayer.play()
     }
 
     private fun resetReplayMode() {
@@ -598,20 +654,9 @@ class LeanbackMainContentState(
 @Composable
 fun rememberLeanbackMainContentState(
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
-    videoPlayerState: LeanbackVideoPlayerState = rememberLeanbackVideoPlayerState(),
-    standbyVideoPlayerState: LeanbackVideoPlayerState = rememberLeanbackVideoPlayerState(
-        // 待机播放器：小缓冲，只用于预缓冲，避免与主播放器争抢内存
-        minBufferMs = 5_000,
-        maxBufferMs = 5_000,
-        bufferForPlaybackMs = 500,
-        bufferForPlaybackAfterRebufferMs = 1_000,
-    ),
-    extraStandbyVideoPlayerState: LeanbackVideoPlayerState = rememberLeanbackVideoPlayerState(
-        minBufferMs = 5_000,
-        maxBufferMs = 5_000,
-        bufferForPlaybackMs = 500,
-        bufferForPlaybackAfterRebufferMs = 1_000,
-    ),
+    videoPlayerState: LeanbackVideoPlayerState,
+    standbyVideoPlayerState: LeanbackVideoPlayerState,
+    extraStandbyVideoPlayerState: LeanbackVideoPlayerState,
     iptvGroupList: IptvGroupList = IptvGroupList(),
     epgListProvider: () -> EpgList = { EpgList() },
 ) = remember {
@@ -623,6 +668,9 @@ fun rememberLeanbackMainContentState(
         iptvGroupList = iptvGroupList,
         epgListProvider = epgListProvider,
     )
+}.also { state ->
+    // 初始开播放在 effect 里，不进组合期
+    LaunchedEffect(state) { state.start() }
 }
 
 private fun getUrlHost(url: String): String {

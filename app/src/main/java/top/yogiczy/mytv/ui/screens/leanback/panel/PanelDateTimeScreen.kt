@@ -15,6 +15,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.SP
@@ -62,7 +63,7 @@ fun LeanbackPanelDateTimeScreen(
                     .align(Alignment.TopEnd)
                     .padding(top = childPadding.top, end = childPadding.end)
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(0.8f),
+                        color = MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurface),
                         shape = MaterialTheme.shapes.small,
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp),

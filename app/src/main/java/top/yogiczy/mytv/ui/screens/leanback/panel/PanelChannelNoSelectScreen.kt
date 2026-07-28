@@ -63,6 +63,19 @@ class LeanbackPanelChannelNoSelectState(
         channel.trySend(_channelNo)
     }
 
+    /** 按 OK 立即确认，跳过等待倒计时 */
+    fun confirm() {
+        if (_channelNo.isNotEmpty()) {
+            onChannelNoConfirm(_channelNo)
+            _channelNo = ""
+        }
+    }
+
+    /** 按返回取消本次输入 */
+    fun cancel() {
+        _channelNo = ""
+    }
+
     private val channel = Channel<String>(Channel.CONFLATED)
 
     @OptIn(FlowPreview::class)

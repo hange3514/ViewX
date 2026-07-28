@@ -22,8 +22,8 @@ android {
         applicationId = "top.yogiczy.mytv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 33
-        versionName = "2.4.4"
+        versionCode = 34
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -31,7 +31,7 @@ android {
         }
 
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64"))
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
         }
     }
 

@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -51,13 +55,23 @@ fun LeanbackSettingsCategoryFavorite(
         }
 
         item {
+            var showConfirm by remember { mutableStateOf(false) }
+
             LeanbackSettingsCategoryListItem(
                 headlineContent = "清空全部收藏",
-                supportingContent = "短按立即清空全部收藏",
-                onSelected = {
+                supportingContent = "短按清空全部收藏（需二次确认）",
+                onSelected = { showConfirm = true }
+            )
+
+            LeanbackSettingsConfirmDialog(
+                showDialogProvider = { showConfirm },
+                onDismissRequest = { showConfirm = false },
+                title = "清空全部收藏",
+                text = "确定要删除全部 ${settingsViewModel.iptvChannelFavoriteList.size} 个收藏频道吗？此操作不可撤销。",
+                onConfirm = {
                     settingsViewModel.iptvChannelFavoriteList = emptySet()
                     settingsViewModel.iptvChannelFavoriteListVisible = false
-                }
+                },
             )
         }
     }

@@ -27,6 +27,8 @@ import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvGroupList
 import top.yogiczy.mytv.data.entities.IptvGroupList.Companion.iptvGroupIdx
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import kotlin.math.max
@@ -60,7 +62,7 @@ fun LeanbackPanelIptvGroupList(
     TvLazyColumn(
         modifier = modifier,
         state = listState,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
         contentPadding = PaddingValues(bottom = childPadding.bottom),
     ) {
         itemsIndexed(

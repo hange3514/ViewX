@@ -54,16 +54,22 @@ object Downloader : Loggable() {
         override fun source(): BufferedSource {
             return object : ForwardingSource(originalResponse.body!!.source()) {
                 var totalBytesRead = 0L
+                var lastEmitAt = 0L
 
                 override fun read(sink: okio.Buffer, byteCount: Long): Long {
                     val bytesRead = super.read(sink, byteCount)
                     totalBytesRead += if (bytesRead != -1L) bytesRead else 0
-                    // contentLength 为 -1（chunked 响应）时无法计算进度
+                    // contentLength 为 -1（chunked 响应）时无法计算进度；
+                    // 每 chunk 都回调会产生数千个协程和 toast 洪泛，节流至 300ms 一次
                     val length = contentLength()
                     if (length > 0) {
-                        val progress = (totalBytesRead * 100 / length).toInt()
-                        CoroutineScope(Dispatchers.IO).launch {
-                            onProgressCb?.invoke(progress)
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastEmitAt > 300 || bytesRead == -1L) {
+                            lastEmitAt = now
+                            val progress = (totalBytesRead * 100 / length).toInt()
+                            CoroutineScope(Dispatchers.IO).launch {
+                                onProgressCb?.invoke(progress)
+                            }
                         }
                     }
                     return bytesRead

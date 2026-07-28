@@ -16,7 +16,35 @@ object SP {
         context.getSharedPreferences(SP_NAME, SP_MODE)
 
     fun init(context: Context) {
-        sp = getInstance(context)
+        sp = SafeSharedPreferences(getInstance(context))
+    }
+
+    /**
+     * 类型安全的 SharedPreferences 包装：升级/回滚导致同键异类型（脏值）时，
+     * getter 不再抛 ClassCastException 让启动崩溃，而是删键回退默认值
+     */
+    private class SafeSharedPreferences(
+        private val delegate: SharedPreferences,
+    ) : SharedPreferences by delegate {
+        private fun removeKey(key: String) = delegate.edit().remove(key).apply()
+
+        override fun getString(key: String, defValue: String?): String? =
+            runCatching { delegate.getString(key, defValue) }.getOrElse { removeKey(key); defValue }
+
+        override fun getInt(key: String, defValue: Int): Int =
+            runCatching { delegate.getInt(key, defValue) }.getOrElse { removeKey(key); defValue }
+
+        override fun getLong(key: String, defValue: Long): Long =
+            runCatching { delegate.getLong(key, defValue) }.getOrElse { removeKey(key); defValue }
+
+        override fun getFloat(key: String, defValue: Float): Float =
+            runCatching { delegate.getFloat(key, defValue) }.getOrElse { removeKey(key); defValue }
+
+        override fun getBoolean(key: String, defValue: Boolean): Boolean =
+            runCatching { delegate.getBoolean(key, defValue) }.getOrElse { removeKey(key); defValue }
+
+        override fun getStringSet(key: String, defValue: Set<String>?): Set<String>? =
+            runCatching { delegate.getStringSet(key, defValue) }.getOrElse { removeKey(key); defValue }
     }
 
     enum class KEY {
@@ -108,6 +136,9 @@ object SP {
 
         /** 时间显示模式 */
         UI_TIME_SHOW_MODE,
+
+        /** 设置页上次停留的分类 */
+        UI_SETTINGS_LAST_CATEGORY,
 
         /** 画中画模式 */
         UI_PIP_MODE,
@@ -274,6 +305,11 @@ object SP {
     var uiTimeShowMode: UiTimeShowMode
         get() = UiTimeShowMode.fromValue(sp.getInt(KEY.UI_TIME_SHOW_MODE.name, 0))
         set(value) = sp.edit().putInt(KEY.UI_TIME_SHOW_MODE.name, value.value).apply()
+
+    /** 设置页上次停留的分类（name 字符串） */
+    var uiSettingsLastCategory: String
+        get() = sp.getString(KEY.UI_SETTINGS_LAST_CATEGORY.name, "") ?: ""
+        set(value) = sp.edit().putString(KEY.UI_SETTINGS_LAST_CATEGORY.name, value).apply()
 
     /** 画中画模式 */
     var uiPipMode: Boolean

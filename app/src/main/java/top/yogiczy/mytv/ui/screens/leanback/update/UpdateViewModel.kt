@@ -78,6 +78,18 @@ class LeanBackUpdateViewModel : ViewModel() {
                 Downloader.downloadTo(directUrl, latestFile.path, onProgress)
             }
 
+            // 完整性校验：APK 必须是包含 AndroidManifest.xml 的 zip，
+            // 防止代理返回的错误页/半截文件直接调起安装
+            val validApk = runCatching {
+                java.util.zip.ZipFile(latestFile).use { zip ->
+                    zip.getEntry("AndroidManifest.xml") != null
+                }
+            }.getOrDefault(false)
+            if (!validApk) {
+                latestFile.delete()
+                throw Exception("下载的更新包不完整")
+            }
+
             _updateDownloaded = true
             LeanbackToastState.I.showToast("下载更新成功")
         } catch (ex: Exception) {

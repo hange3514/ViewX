@@ -31,10 +31,7 @@ class LeanbackMainViewModel : ViewModel() {
     val uiState: StateFlow<LeanbackMainUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            refreshIptv()
-            refreshEpg()
-        }
+        load()
 
         // 网页端推送新的节目单地址后实时刷新，无需重启应用
         viewModelScope.launch {
@@ -44,6 +41,22 @@ class LeanbackMainViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    private fun load() {
+        viewModelScope.launch {
+            refreshIptv()
+            refreshEpg()
+        }
+    }
+
+    /**
+     * 加载失败后重试（错误页"按确定重试"）
+     */
+    fun retry() {
+        if (_uiState.value is LeanbackMainUiState.Loading) return
+        _uiState.value = LeanbackMainUiState.Loading()
+        load()
     }
 
     private suspend fun refreshIptv() {

@@ -45,6 +45,10 @@ import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.indexOfCurrent
 import top.yogiczy.mytv.data.entities.Iptv
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
@@ -69,7 +73,16 @@ fun LeanbackClassicPanelEpgList(
     val dateFormat = remember { SimpleDateFormat("E MM-dd", Locale.getDefault()) }
     val epg = epgProvider()
 
-    if (epg != null && epg.programmes.isNotEmpty()) {
+    if (epg == null || epg.programmes.isEmpty()) {
+        // 空节目单也显示提示（此前整块不渲染，用户无法区分"没加载"还是"没节目"）
+        top.yogiczy.mytv.ui.screens.leanback.components.LeanbackEmptyListItem(
+            text = "当前频道暂无节目",
+            modifier = modifier,
+        )
+        return
+    }
+
+
         val programmesGroup = remember(epg) {
             epg.programmes.groupBy { dateFormat.format(it.startAt) }
         }
@@ -100,11 +113,11 @@ fun LeanbackClassicPanelEpgList(
             TvLazyColumn(
                 state = programmesListState,
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
                 modifier = modifier
                     .fillMaxHeight()
                     .width(240.dp)
-                    .background(MaterialTheme.colorScheme.background.copy(0.7f))
+                    .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurfaceShallow))
                     .focusProperties {
                         exit = {
                             if (it == FocusDirection.Left) exitFocusRequesterProvider()
@@ -125,11 +138,11 @@ fun LeanbackClassicPanelEpgList(
                 TvLazyColumn(
                     state = daysListState,
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
                     modifier = modifier
                         .fillMaxHeight()
                         .width(100.dp)
-                        .background(MaterialTheme.colorScheme.background.copy(0.7f))
+                        .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurfaceShallow))
                 ) {
 
                     items(programmesGroup.keys.toList(), key = { it }) {
@@ -142,7 +155,6 @@ fun LeanbackClassicPanelEpgList(
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -180,8 +192,8 @@ private fun LeanbackClassicPanelEpgItem(
     }
 
     CompositionLocalProvider(
-        LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-        else MaterialTheme.colorScheme.onBackground
+        LocalContentColor provides if (isFocused) LeanbackFocusedContentColor
+        else LeanbackFocusedContainerColor
     ) {
         androidx.tv.material3.ListItem(
             modifier = modifier
@@ -246,8 +258,8 @@ private fun LeanbackClassicPanelEpgDayItem(
     var isFocused by remember { mutableStateOf(false) }
 
     CompositionLocalProvider(
-        LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-        else MaterialTheme.colorScheme.onBackground
+        LocalContentColor provides if (isFocused) LeanbackFocusedContentColor
+        else LeanbackFocusedContainerColor
     ) {
         androidx.tv.material3.ListItem(
             modifier = modifier

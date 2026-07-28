@@ -53,7 +53,6 @@ object HttpServer : Loggable() {
         // 重复 listen 同一端口会误报"设置服务启动失败"
         this.showToast = showToast
         if (started) return
-        started = true
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -71,17 +70,22 @@ object HttpServer : Loggable() {
                 }
 
                 server.get("/api/settings") { _, response ->
-                    handleGetSettings(response)
+                    runCatching { handleGetSettings(response) }
+                        .onFailure { response.code(500); response.send("error") }
                 }
 
                 server.post("/api/settings") { request, response ->
-                    handleSetSettings(request, response)
+                    runCatching { handleSetSettings(request, response) }
+                        .onFailure { response.code(400); response.send("bad request") }
                 }
 
                 server.post("/api/upload/apk") { request, response ->
-                    handleUploadApk(request, response, context)
+                    runCatching { handleUploadApk(request, response, context) }
+                        .onFailure { response.code(500); response.send("error") }
                 }
 
+                // 成功 listen 后才置位，失败允许下次重试
+                started = true
                 HttpServer.showToast = showToast
                 log.i("服务已启动: 0.0.0.0:${SERVER_PORT}")
             } catch (ex: Exception) {
@@ -137,7 +141,14 @@ object HttpServer : Loggable() {
         request: AsyncHttpServerRequest,
         response: AsyncHttpServerResponse,
     ) {
-        val body = request.getBody<JSONObjectBody>().get()
+        // 非 JSON 请求体（表单/旧版页面/第三方脚本）直接 400，不能炸 AsyncServer 线程
+        val body = try {
+            request.getBody<JSONObjectBody>().get()
+        } catch (ex: Exception) {
+            response.code(400)
+            response.send("bad request")
+            return
+        }
         // 字段可能缺失（第三方调用/旧版页面），缺省保持当前值，避免 JSONException
         val iptvSourceUrl = body.optString("iptvSourceUrl", SP.iptvSourceUrl)
         val epgXmlUrl = body.optString("epgXmlUrl", SP.epgXmlUrl)
@@ -162,18 +173,37 @@ object HttpServer : Loggable() {
         wrapResponse(response).send("success")
     }
 
-    @Synchronized
+    /** 上传大小上限 300MB，防恶意/异常请求写满磁盘 */
+    private val maxUploadBytes = 300L * 1024 * 1024
+
+    @Volatile
+    private var uploadInProgress = false
+
     private fun handleUploadApk(
         request: AsyncHttpServerRequest,
         response: AsyncHttpServerResponse,
         context: Context,
     ) {
-        val body = request.getBody<MultipartFormDataBody>()
+        val contentLength = request.headers["Content-Length"]?.toLongOrNull() ?: 0L
+        if (contentLength > maxUploadBytes) {
+            response.code(413)
+            response.send("too large")
+            return
+        }
 
-        // 串行化 + 先删旧文件，避免并发上传交错写坏安装包
+        // 上传真正串行：写文件发生在异步回调里，@Synchronized 包不住，用状态位拦截并发
+        synchronized(this) {
+            if (uploadInProgress) {
+                response.code(409)
+                response.send("upload in progress")
+                return
+            }
+            uploadInProgress = true
+        }
+
+        val body = request.getBody<MultipartFormDataBody>()
         uploadedApkFile.delete()
         val os = uploadedApkFile.outputStream()
-        val contentLength = request.headers["Content-Length"]?.toLong() ?: 1
         var hasReceived = 0L
 
         try {
@@ -182,7 +212,7 @@ object HttpServer : Loggable() {
                     body.setDataCallback { _, bb ->
                         val byteArray = bb.allByteArray
                         hasReceived += byteArray.size
-                        showToast("正在接收文件: ${(hasReceived * 100f / contentLength).toInt()}%")
+                        showToast("正在接收文件: ${(hasReceived * 100f / maxOf(contentLength, 1)).toInt()}%")
                         os.write(byteArray)
                     }
                 }
@@ -201,6 +231,7 @@ object HttpServer : Loggable() {
                         os.close()
                     } catch (_: Exception) {
                     }
+                    uploadInProgress = false
                 }
             }
         } catch (ex: Exception) {
@@ -208,6 +239,7 @@ object HttpServer : Loggable() {
                 os.close()
             } catch (_: Exception) {
             }
+            uploadInProgress = false
             throw ex
         }
 

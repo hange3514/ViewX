@@ -13,9 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackCompositeVideoPlayer
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 
@@ -128,7 +125,6 @@ fun rememberLeanbackVideoPlayerState(
     bufferForPlaybackAfterRebufferMs: Int = 3_000,
 ): LeanbackVideoPlayerState {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
     // 设置项变化后 provider 会重建，用 rememberUpdatedState 保证 state 内始终读最新值
     val latestAspectRatioProvider by rememberUpdatedState(defaultAspectRatioProvider)
@@ -151,22 +147,6 @@ fun rememberLeanbackVideoPlayerState(
 
         onDispose {
             state.release()
-        }
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                state.play()
-            } else if (event == Lifecycle.Event.ON_STOP) {
-                state.pause()
-            }
-        }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

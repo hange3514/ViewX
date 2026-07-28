@@ -37,7 +37,6 @@ import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyListState
 import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.material3.ListItemDefaults
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgList
@@ -46,8 +45,13 @@ import top.yogiczy.mytv.data.entities.IptvGroup
 import top.yogiczy.mytv.data.entities.IptvList
 import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.requestInitialFocusWithRetry
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 import kotlin.math.max
@@ -106,11 +110,11 @@ fun LeanbackClassicPanelIptvList(
     TvLazyColumn(
         state = listState,
         contentPadding = PaddingValues(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
         modifier = modifier
             .fillMaxHeight()
             .width(220.dp)
-            .background(MaterialTheme.colorScheme.background.copy(0.8f)),
+            .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurface)),
     ) {
         itemsIndexed(
             items = iptvList,
@@ -180,22 +184,15 @@ private fun LeanbackClassicPanelIptvItem(
 
     var isFocused by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        if (initialFocusedProvider()) {
-            onInitialFocused()
-            // 部分电视（如长虹）首次弹出面板时布局尚未完成，焦点请求会被静默丢弃，
-            // 导致面板按键无响应；这里重试直至真正获得焦点
-            repeat(20) {
-                if (isFocused) return@LaunchedEffect
-                focusRequester.requestFocus()
-                delay(50)
-            }
-        }
-    }
+    focusRequester.requestInitialFocusWithRetry(
+        initialFocusedProvider = initialFocusedProvider,
+        isFocusedProvider = { isFocused },
+        onInitialFocused = onInitialFocused,
+    )
 
     CompositionLocalProvider(
-        LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-        else MaterialTheme.colorScheme.onBackground
+        LocalContentColor provides if (isFocused) LeanbackFocusedContentColor
+        else LeanbackFocusedContainerColor
     ) {
         Box(
             modifier = Modifier.clip(ListItemDefaults.shape().shape),

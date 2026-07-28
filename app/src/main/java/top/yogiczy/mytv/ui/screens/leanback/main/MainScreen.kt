@@ -74,7 +74,10 @@ fun LeanbackMainScreen(
             LeanbackMainScreenLoading { s.message }
         }
 
-        is LeanbackMainUiState.Error -> LeanbackMainSettingsHandle(onBackPressed = onBackPressed) {
+        is LeanbackMainUiState.Error -> LeanbackMainSettingsHandle(
+            onBackPressed = onBackPressed,
+            onRetry = { mainViewModel.retry() },
+        ) {
             LeanbackMainScreenError({ s.message })
         }
     }
@@ -202,6 +205,7 @@ private fun LeanbackMainScreenErrorLongPreview() {
 private fun LeanbackMainSettingsHandle(
     modifier: Modifier = Modifier,
     onBackPressed: () -> Unit = {},
+    onRetry: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -216,8 +220,12 @@ private fun LeanbackMainSettingsHandle(
             modifier = modifier
                 .focusRequester(focusRequester)
                 .focusable()
-                .tvTouchClickable(onDoubleClick = { showSettings = true })
+                .tvTouchClickable(
+                    onClick = onRetry,
+                    onDoubleClick = { showSettings = true },
+                )
                 .handleLeanbackKeyEvents(
+                    onSelect = onRetry,
                     onSettings = {
                         showSettings = true
                     },

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -27,7 +28,10 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.Density
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
@@ -129,6 +133,20 @@ fun LeanbackMainContent(
         1 -> standbyVideoPlayerState
         else -> extraStandbyVideoPlayerState
     }
+
+    // 生命周期统一管理：退后台暂停全部播放器，回前台只恢复活跃播放器
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> mainContentState.pauseAllPlayers()
+                Lifecycle.Event.ON_RESUME -> mainContentState.resumeActivePlayer()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
             val channelNo = it.toIntOrNull()?.let { no -> no - 1 } ?: -1
@@ -187,6 +205,25 @@ fun LeanbackMainContent(
     fun stopContinuousSeek() {
         seekJob.value?.cancel()
         seekJob.value = null
+    }
+
+    // 长按上/下方向键连续换台（与传统电视翻台习惯一致）
+    val flipJob = remember { mutableStateOf<Job?>(null) }
+    fun startContinuousFlip(direction: Int) {
+        if (!noOverlayVisible) return
+        flipJob.value?.cancel()
+        flipJob.value = coroutineScope.launch {
+            delay(400)
+            while (isActive) {
+                if (direction > 0) mainContentState.changeCurrentIptvToNext()
+                else mainContentState.changeCurrentIptvToPrev()
+                delay(600)
+            }
+        }
+    }
+    fun stopContinuousFlip() {
+        flipJob.value?.cancel()
+        flipJob.value = null
     }
 
     // 稳定的状态提供者，避免父组件每次重组都产生新的 lambda
@@ -274,8 +311,10 @@ fun LeanbackMainContent(
 
     val onBackPressedHandler = remember {
         {
+            // 数字选台输入中按返回：取消本次输入
+            if (panelChannelNoSelectState.channelNo.isNotEmpty()) panelChannelNoSelectState.cancel()
             // 优先关闭浮层，浮层都关闭后才处理退出回放/退出应用
-            if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
+            else if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
             else if (mainContentState.isSettingsVisible) mainContentState.isSettingsVisible = false
             else if (mainContentState.isQuickPanelVisible) mainContentState.isQuickPanelVisible = false
             else if (mainContentState.isReplayMode) {
@@ -314,11 +353,14 @@ fun LeanbackMainContent(
     }
     val onClearCache = remember {
         {
+            // 与设置页"清除缓存"范围一致：清直播源/节目单缓存和可播放域名记忆，
+            // 不删缓存根目录（会连带删除下载中的更新包并导致缓存写入失败）
             settingsViewModel.iptvPlayableHostList = emptySet()
             coroutineScope.launch {
-                AppGlobal.cacheDir.deleteRecursively()
+                top.yogiczy.mytv.data.repositories.iptv.IptvRepository().clearCache()
+                top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearCache()
             }
-            LeanbackToastState.I.showToast("缓存已清除，请重启应用")
+            LeanbackToastState.I.showToast("清除缓存成功")
         }
     }
     val onChangeVideoPlayerAspectRatio =
@@ -403,10 +445,6 @@ fun LeanbackMainContent(
             }
         }
     }
-    val onKeyLongDown = remember {
-        { if (noOverlayVisible) mainContentState.isQuickPanelVisible = true }
-    }
-
     LeanbackBackPressHandledArea(
         modifier = modifier,
         onBackPressed = onBackPressedHandler,
@@ -419,7 +457,11 @@ fun LeanbackMainContent(
                 .focusable()
                 .handleLeanbackKeyEvents(
                     onUp = onKeyUp,
+                    onUpDown = { startContinuousFlip(-1) },
+                    onUpUp = { stopContinuousFlip() },
                     onDown = onKeyDown,
+                    onDownDown = { startContinuousFlip(1) },
+                    onDownUp = { stopContinuousFlip() },
                     onLeft = onKeyLeft,
                     onLeftDown = { startContinuousSeek(-REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
                     onLeftUp = { stopContinuousSeek() },
@@ -427,7 +469,10 @@ fun LeanbackMainContent(
                     onRightDown = { startContinuousSeek(REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
                     onRightUp = { stopContinuousSeek() },
                     onSelect = {
-                        if (noOverlayVisible) {
+                        if (panelChannelNoSelectState.channelNo.isNotEmpty()) {
+                            // 数字选台输入中：OK 立即确认
+                            panelChannelNoSelectState.confirm()
+                        } else if (noOverlayVisible) {
                             if (mainContentState.isReplayMode) {
                                 // 回放中：OK 呼出控制条，控制条显示时再按 OK 暂停/继续
                                 if (replayBarVisible.value || mainContentState.isReplayPaused) {
@@ -443,7 +488,6 @@ fun LeanbackMainContent(
                     onLongSelect = { if (noOverlayVisible) mainContentState.isQuickPanelVisible = true },
                     onSettings = onKeySettings,
                     onNumber = onKeyNumber,
-                    onLongDown = onKeyLongDown,
                 )
                 .handleLeanbackDragGestures(
                     onSwipeDown = onKeyDown,

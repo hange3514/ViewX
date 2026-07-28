@@ -35,6 +35,8 @@ import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.data.entities.IptvList
 import top.yogiczy.mytv.data.entities.findByIptv
 import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
@@ -103,8 +105,8 @@ fun LeanbackPanelIptvFavoriteList(
         TvLazyVerticalGrid(
             state = listState,
             columns = TvGridCells.Fixed(favoriteListSize),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
+            verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
             contentPadding = PaddingValues(
                 top = 6.dp,
                 start = childPadding.start,

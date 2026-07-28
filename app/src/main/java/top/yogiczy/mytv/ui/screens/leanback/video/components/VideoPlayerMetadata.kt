@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 
 @Composable
@@ -28,7 +29,7 @@ fun LeanbackVideoPlayerMetadata(
         Column(
             modifier = modifier
                 .background(
-                    MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                    MaterialTheme.colorScheme.background.copy(alpha = LeanbackAlpha.PanelSurface),
                     MaterialTheme.shapes.extraSmall,
                 )
                 .padding(horizontal = 8.dp, vertical = 4.dp),

@@ -80,7 +80,10 @@ class EpgRepository : FileCacheRepository("epg.json") {
         fun skipSubTree() {
             var depth = 1
             while (depth > 0) {
-                when (parser.next()) {
+                val next = parser.next()
+                // 畸形/截断的 XML 没有闭合标签时，next() 会一直停在 END_DOCUMENT，必须兜底退出
+                if (next == XmlPullParser.END_DOCUMENT) return
+                when (next) {
                     XmlPullParser.START_TAG -> depth++
                     XmlPullParser.END_TAG -> depth--
                 }
@@ -98,7 +101,10 @@ class EpgRepository : FileCacheRepository("epg.json") {
                         var channelName = ""
 
                         var inner = parser.nextToken()
-                        while (!(inner == XmlPullParser.END_TAG && parser.name == "channel")) {
+                        // 缺闭合标签的畸形 XML 兜底退出，防死循环
+                        while (inner != XmlPullParser.END_DOCUMENT &&
+                            !(inner == XmlPullParser.END_TAG && parser.name == "channel")
+                        ) {
                             if (inner == XmlPullParser.START_TAG && parser.name == "display-name") {
                                 channelName = parser.nextText()
                             } else if (inner == XmlPullParser.START_TAG) {
@@ -128,7 +134,9 @@ class EpgRepository : FileCacheRepository("epg.json") {
                         var title = ""
 
                         var inner = parser.nextToken()
-                        while (!(inner == XmlPullParser.END_TAG && parser.name == "programme")) {
+                        while (inner != XmlPullParser.END_DOCUMENT &&
+                            !(inner == XmlPullParser.END_TAG && parser.name == "programme")
+                        ) {
                             if (inner == XmlPullParser.START_TAG && parser.name == "title") {
                                 title = parser.nextText()
                             } else if (inner == XmlPullParser.START_TAG) {
@@ -218,9 +226,16 @@ private class EpgXmlRepository : FileCacheRepository("epg.xml") {
                     throw Exception("获取远程节目单xml失败: $code")
                 }
 
-                val fetcher = EpgFetcher.instances.first { it.isSupport(url) }
+                // 按内容嗅探（而非 URL 后缀）识别 gzip/纯文本，
+                // 兼容 epg.xml?token=xx、epg.php 等地址
+                val bytes = body!!.bytes()
+                return@with when {
+                    bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte() ->
+                        java.util.zip.GZIPInputStream(bytes.inputStream())
+                            .bufferedReader(Charsets.UTF_8).readText()
 
-                return@with fetcher.fetch(this)
+                    else -> String(bytes, Charsets.UTF_8)
+                }
             }
         } catch (ex: Exception) {
             throw Exception("获取远程节目单xml失败，请检查网络连接", ex)

@@ -13,8 +13,9 @@ import java.io.File
 abstract class FileCacheRepository(
     private val fileName: String,
 ) {
-    // 防止多个协程并发刷新同一缓存时交叉写文件
-    private val mutex = Mutex()
+    // 仓库在调用点到处 new 实例，实例级互斥锁防不住并发，
+    // 按缓存文件名全局共享一把锁
+    private val mutex get() = mutexFor(fileName)
 
     private fun getCacheFile() = File(AppGlobal.cacheDir, fileName)
 
@@ -70,4 +71,10 @@ abstract class FileCacheRepository(
             if (!cacheData.isNullOrBlank()) cacheData else throw ex
         }
     }
+}
+
+private val cacheMutexes = mutableMapOf<String, Mutex>()
+
+private fun mutexFor(fileName: String): Mutex = synchronized(cacheMutexes) {
+    cacheMutexes.getOrPut(fileName) { Mutex() }
 }

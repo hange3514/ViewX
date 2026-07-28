@@ -119,8 +119,12 @@ fun Modifier.handleLeanbackKeyEvents(
     onRightUp: () -> Unit = {},
     onUp: () -> Unit = {},
     onLongUp: () -> Unit = {},
+    onUpDown: () -> Unit = {},
+    onUpUp: () -> Unit = {},
     onDown: () -> Unit = {},
     onLongDown: () -> Unit = {},
+    onDownDown: () -> Unit = {},
+    onDownUp: () -> Unit = {},
     onSelect: () -> Unit = {},
     onLongSelect: () -> Unit = {},
     onSettings: () -> Unit = {},
@@ -164,6 +168,8 @@ fun Modifier.handleLeanbackKeyEvents(
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> onLeftDown()
             KeyEvent.KEYCODE_DPAD_RIGHT -> onRightDown()
+            KeyEvent.KEYCODE_DPAD_UP -> onUpDown()
+            KeyEvent.KEYCODE_DPAD_DOWN -> onDownDown()
         }
     }
 
@@ -171,6 +177,8 @@ fun Modifier.handleLeanbackKeyEvents(
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> onLeftUp()
             KeyEvent.KEYCODE_DPAD_RIGHT -> onRightUp()
+            KeyEvent.KEYCODE_DPAD_UP -> onUpUp()
+            KeyEvent.KEYCODE_DPAD_DOWN -> onDownUp()
         }
     }
 

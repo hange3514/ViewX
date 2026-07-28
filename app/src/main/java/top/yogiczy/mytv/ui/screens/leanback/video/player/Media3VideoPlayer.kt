@@ -117,6 +117,8 @@ class LeanbackMedia3VideoPlayer(
             if (ex.errorCode == Media3PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                 videoPlayer.seekToDefaultPosition()
                 videoPlayer.prepare()
+                // 重新武装加载超时，否则这次重连卡住将无任何兜底
+                triggerPrepared()
             }
             // 当解析容器不支持时，尝试使用其他解析容器
             else if (ex.errorCode == Media3PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) {

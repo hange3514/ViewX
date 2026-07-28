@@ -36,6 +36,10 @@ import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.IptvGroup
 import top.yogiczy.mytv.data.entities.IptvGroupList
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
+import top.yogiczy.mytv.ui.theme.LeanbackDimens
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
@@ -68,11 +72,11 @@ fun LeanbackClassicPanelIptvGroupList(
     TvLazyColumn(
         state = listState,
         contentPadding = PaddingValues(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
         modifier = modifier
             .width(140.dp)
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.background.copy(0.9f))
+            .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurfaceDeep))
             .focusRequester(focusRequester)
             .focusProperties {
                 exit = {
@@ -126,8 +130,8 @@ private fun LeanbackClassicPanelIptvGroupItem(
     }
 
     CompositionLocalProvider(
-        LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-        else MaterialTheme.colorScheme.onBackground
+        LocalContentColor provides if (isFocused) LeanbackFocusedContentColor
+        else LeanbackFocusedContainerColor
     ) {
         androidx.tv.material3.ListItem(
             modifier = modifier

@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -34,9 +35,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.entities.EpgProgramme
+import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -135,16 +140,25 @@ fun LeanbackReplayControlBar(
                                 modifier = Modifier.alpha(0.8f),
                             )
                         }
-                        // 触摸设备无返回键，提供退出回放入口（遥控器双击返回不受影响）
+                        // 退出回放入口：触摸可点、遥控器可聚焦（双击返回的方式保留）
+                        val exitFocusRequester = remember { FocusRequester() }
+                        var exitFocused by remember { mutableStateOf(false) }
                         Text(
                             text = "退出回放",
                             style = MaterialTheme.typography.bodyMedium,
+                            color = if (exitFocused) MaterialTheme.colorScheme.background
+                            else LocalContentColor.current,
                             modifier = Modifier
+                                .focusRequester(exitFocusRequester)
+                                .onFocusChanged { exitFocused = it.isFocused || it.hasFocus }
                                 .background(
-                                    LocalContentColor.current.copy(alpha = 0.2f),
+                                    if (exitFocused) LocalContentColor.current
+                                    else LocalContentColor.current.copy(alpha = 0.2f),
                                     MaterialTheme.shapes.small,
                                 )
+                                .focusable()
                                 .tvTouchClickable(onClick = onExitReplay)
+                                .handleLeanbackKeyEvents(onSelect = { onExitReplay() })
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                         Text(

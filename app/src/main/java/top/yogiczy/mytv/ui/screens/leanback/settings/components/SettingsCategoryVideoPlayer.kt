@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,18 +50,22 @@ fun LeanbackSettingsCategoryVideoPlayer(
 
 
         item {
-            val min = 1000 * 5L
-            val max = 1000 * 30L
-            val step = 1000 * 5L
+            var showDialog by remember { mutableStateOf(false) }
 
             LeanbackSettingsCategoryListItem(
                 headlineContent = "播放器加载超时",
                 supportingContent = "影响超时换源、断线重连",
                 trailingContent = settingsViewModel.videoPlayerLoadTimeout.humanizeMs(),
-                onSelected = {
-                    settingsViewModel.videoPlayerLoadTimeout =
-                        max(min, (settingsViewModel.videoPlayerLoadTimeout + step) % (max + step))
-                },
+                onSelected = { showDialog = true },
+            )
+
+            LeanbackSettingsValueSelectDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+                title = "播放器加载超时",
+                options = listOf(5L, 10L, 15L, 20L, 30L).map { "${it}秒" to it * 1000 },
+                currentValueProvider = { settingsViewModel.videoPlayerLoadTimeout },
+                onSelected = { settingsViewModel.videoPlayerLoadTimeout = it },
             )
         }
 

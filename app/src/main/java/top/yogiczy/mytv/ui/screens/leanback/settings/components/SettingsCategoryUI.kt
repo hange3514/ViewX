@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -112,54 +116,50 @@ fun LeanbackSettingsCategoryUI(
         }
 
         item {
-            val defaultScale = 1f
-            val minScale = 1f
-            val maxScale = 2f
-            val stepScale = 0.1f
+            var showDialog by remember { mutableStateOf(false) }
+            val scaleOptions = listOf(0.8f, 1f, 1.1f, 1.2f, 1.3f, 1.5f, 2f)
 
             LeanbackSettingsCategoryListItem(
                 headlineContent = "界面整体缩放比例",
-                supportingContent = "短按切换缩放比例，长按恢复默认；部分界面受影响",
+                supportingContent = "短按选择缩放比例，长按恢复默认；部分界面受影响",
                 trailingContent = "×${DecimalFormat("#.#").format(settingsViewModel.uiDensityScaleRatio)}",
-                onSelected = {
-                    if (settingsViewModel.uiDensityScaleRatio >= maxScale) {
-                        settingsViewModel.uiDensityScaleRatio = minScale
-                    } else {
-                        settingsViewModel.uiDensityScaleRatio =
-                            (settingsViewModel.uiDensityScaleRatio + stepScale).coerceIn(
-                                minScale, maxScale
-                            )
-                    }
-                },
+                onSelected = { showDialog = true },
                 onLongSelected = {
-                    settingsViewModel.uiDensityScaleRatio = defaultScale
+                    settingsViewModel.uiDensityScaleRatio = 1f
                 },
+            )
+
+            LeanbackSettingsValueSelectDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+                title = "界面整体缩放比例",
+                options = scaleOptions.map { "×${DecimalFormat("#.#").format(it)}" to it },
+                currentValueProvider = { settingsViewModel.uiDensityScaleRatio },
+                onSelected = { settingsViewModel.uiDensityScaleRatio = it },
             )
         }
 
         item {
-            val defaultScale = 1f
-            val minScale = 1f
-            val maxScale = 2f
-            val stepScale = 0.1f
+            var showDialog by remember { mutableStateOf(false) }
+            val scaleOptions = listOf(0.8f, 1f, 1.2f, 1.5f, 2f)
 
             LeanbackSettingsCategoryListItem(
                 headlineContent = "界面字体缩放比例",
-                supportingContent = "短按切换缩放比例，长按恢复默认；部分界面受影响",
+                supportingContent = "短按选择缩放比例，长按恢复默认；部分界面受影响",
                 trailingContent = "×${DecimalFormat("#.#").format(settingsViewModel.uiFontScaleRatio)}",
-                onSelected = {
-                    if (settingsViewModel.uiFontScaleRatio >= maxScale) {
-                        settingsViewModel.uiFontScaleRatio = minScale
-                    } else {
-                        settingsViewModel.uiFontScaleRatio =
-                            (settingsViewModel.uiFontScaleRatio + stepScale).coerceIn(
-                                minScale, maxScale
-                            )
-                    }
-                },
+                onSelected = { showDialog = true },
                 onLongSelected = {
-                    settingsViewModel.uiFontScaleRatio = defaultScale
+                    settingsViewModel.uiFontScaleRatio = 1f
                 },
+            )
+
+            LeanbackSettingsValueSelectDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+                title = "界面字体缩放比例",
+                options = scaleOptions.map { "×${DecimalFormat("#.#").format(it)}" to it },
+                currentValueProvider = { settingsViewModel.uiFontScaleRatio },
+                onSelected = { settingsViewModel.uiFontScaleRatio = it },
             )
         }
     }

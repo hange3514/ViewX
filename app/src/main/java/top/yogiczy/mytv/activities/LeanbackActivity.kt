@@ -21,7 +21,6 @@ import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
 import top.yogiczy.mytv.ui.utils.SP
-import kotlin.system.exitProcess
 
 class LeanbackActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
@@ -59,10 +58,8 @@ class LeanbackActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background),
                 ) {
                     LeanbackApp(
-                        onBackPressed = {
-                            finish()
-                            exitProcess(0)
-                        },
+                        // finish 后让系统自然回收；exitProcess 会绕过 SP 的异步落盘
+                        onBackPressed = { finish() },
                     )
                 }
             }

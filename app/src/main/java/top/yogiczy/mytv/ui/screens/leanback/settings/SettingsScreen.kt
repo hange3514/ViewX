@@ -26,6 +26,7 @@ import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.screens.leanback.settings.components.LeanbackSettingsCategoryContent
 import top.yogiczy.mytv.ui.screens.leanback.settings.components.LeanbackSettingsCategoryList
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
 @Composable
@@ -39,7 +40,13 @@ fun LeanbackSettingsScreen(
         focusRequester.requestFocus()
     }
 
-    var focusedCategory by remember { mutableStateOf(LeanbackSettingsCategories.entries.first()) }
+    var focusedCategory by remember {
+        mutableStateOf(
+            LeanbackSettingsCategories.entries
+                .firstOrNull { it.name == SP.uiSettingsLastCategory }
+                ?: LeanbackSettingsCategories.entries.first()
+        )
+    }
 
     Box(
         modifier = modifier
@@ -71,7 +78,10 @@ fun LeanbackSettingsScreen(
                 LeanbackSettingsCategoryList(
                     modifier = Modifier.width(200.dp),
                     focusedCategoryProvider = { focusedCategory },
-                    onFocused = { focusedCategory = it },
+                    onFocused = {
+                        focusedCategory = it
+                        SP.uiSettingsLastCategory = it.name
+                    },
                 )
             }
 

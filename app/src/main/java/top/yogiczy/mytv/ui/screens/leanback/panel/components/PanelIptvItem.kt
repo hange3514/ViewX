@@ -29,14 +29,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.CardDefaults
-import kotlinx.coroutines.delay
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.Iptv
 import top.yogiczy.mytv.ui.screens.leanback.components.ProgrammeProgressIndicator
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
+import top.yogiczy.mytv.ui.utils.requestInitialFocusWithRetry
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 
@@ -60,18 +62,11 @@ fun LeanbackPanelIptvItem(
     val currentProgramme = rememberCurrentProgramme(epgProvider()?.programmes ?: emptyList())
     val showProgrammeProgress = showProgrammeProgressProvider()
 
-    LaunchedEffect(Unit) {
-        if (initialFocusedProvider()) {
-            onHasFocused()
-            // 部分电视（如长虹）首次弹出面板时布局尚未完成，焦点请求会被静默丢弃，
-            // 导致面板按键无响应；这里重试直至真正获得焦点
-            repeat(20) {
-                if (isFocused) return@LaunchedEffect
-                focusRequester.requestFocus()
-                delay(50)
-            }
-        }
-    }
+    focusRequester.requestInitialFocusWithRetry(
+        initialFocusedProvider = initialFocusedProvider,
+        isFocusedProvider = { isFocused },
+        onInitialFocused = onHasFocused,
+    )
 
     androidx.tv.material3.Card(
         onClick = { onIptvSelected() },
@@ -122,17 +117,17 @@ fun LeanbackPanelIptvItem(
                     text = iptv.name,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
-                    color = if (isFocused) MaterialTheme.colorScheme.background
-                    else MaterialTheme.colorScheme.onBackground,
+                    color = if (isFocused) LeanbackFocusedContentColor
+                    else LeanbackFocusedContainerColor,
                 )
 
                 Text(
-                    text = currentProgramme?.title ?: "",
+                    text = currentProgramme?.title ?: "无节目",
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     modifier = Modifier.alpha(0.8f),
-                    color = if (isFocused) MaterialTheme.colorScheme.background
-                    else MaterialTheme.colorScheme.onBackground,
+                    color = if (isFocused) LeanbackFocusedContentColor
+                    else LeanbackFocusedContainerColor,
                 )
             }
 

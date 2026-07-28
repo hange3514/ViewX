@@ -39,6 +39,7 @@ import top.yogiczy.mytv.ui.screens.leanback.settings.LeanbackSettingsViewModel
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
@@ -83,17 +84,25 @@ fun LeanbackSettingsCategoryEpg(
         }
 
         item {
+            var showDialog by remember { mutableStateOf(false) }
+
             LeanbackSettingsCategoryListItem(
                 headlineContent = "节目单刷新时间阈值",
-                supportingContent = "短按增加1小时，长按设为0小时；时间不到${settingsViewModel.epgRefreshTimeThreshold}:00节目单将不会刷新",
+                supportingContent = "短按选择，长按设为0小时；时间不到${settingsViewModel.epgRefreshTimeThreshold}:00节目单将不会刷新",
                 trailingContent = "${settingsViewModel.epgRefreshTimeThreshold}小时",
-                onSelected = {
-                    settingsViewModel.epgRefreshTimeThreshold =
-                        (settingsViewModel.epgRefreshTimeThreshold + 1) % 12
-                },
+                onSelected = { showDialog = true },
                 onLongSelected = {
                     settingsViewModel.epgRefreshTimeThreshold = 0
                 },
+            )
+
+            LeanbackSettingsValueSelectDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+                title = "节目单刷新时间阈值",
+                options = listOf(0, 2, 4, 6, 8, 12, 24).map { "${it}小时" to it },
+                currentValueProvider = { settingsViewModel.epgRefreshTimeThreshold },
+                onSelected = { settingsViewModel.epgRefreshTimeThreshold = it },
             )
         }
 
@@ -123,6 +132,9 @@ fun LeanbackSettingsCategoryEpg(
                     if (settingsViewModel.epgXmlUrl != it) {
                         settingsViewModel.epgXmlUrl = it
                         coroutineScope.launch { EpgRepository().clearCache() }
+                        // 与网页推送路径对齐：立即刷新节目单
+                        LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
+                        LeanbackToastState.I.showToast("节目单地址已切换，正在刷新...")
                     }
                 },
                 onDeleted = {

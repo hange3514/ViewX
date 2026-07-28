@@ -19,16 +19,17 @@ enum class LeanbackSettingsCategories(
     val icon: ImageVector,
     val title: String
 ) {
-    ABOUT(Icons.Default.Info, "关于"),
-    APP(Icons.Default.Settings, "应用"),
+    // 按使用频率排序：高频在前，关于/日志垫底
     IPTV(Icons.Default.LiveTv, "直播源"),
     EPG(Icons.Default.Menu, "节目单"),
     UI(Icons.Default.DisplaySettings, "界面"),
-    FAVORITE(Icons.Default.Star, "收藏"),
-    UPDATE(Icons.Default.Update, "更新"),
     VIDEO_PLAYER(Icons.Default.SmartDisplay, "播放器"),
+    FAVORITE(Icons.Default.Star, "收藏"),
+    APP(Icons.Default.Settings, "应用"),
     HTTP(Icons.Default.Http, "网络"),
+    UPDATE(Icons.Default.Update, "更新"),
     DEBUG(Icons.Default.BugReport, "调试"),
     LOG(Icons.Default.FormatListNumbered, "日志"),
-    MORE(Icons.Default.MoreHoriz, "更多设置"),
+    MORE(Icons.Default.MoreHoriz, "远程配置"),
+    ABOUT(Icons.Default.Info, "关于"),
 }

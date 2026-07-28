@@ -39,6 +39,7 @@ import top.yogiczy.mytv.ui.screens.leanback.settings.LeanbackSettingsViewModel
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.HttpServer
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
@@ -123,17 +124,27 @@ fun LeanbackSettingsCategoryIptv(
         }
 
         item {
+            var showDialog by remember { mutableStateOf(false) }
+
             LeanbackSettingsCategoryListItem(
                 headlineContent = "直播源缓存时间",
-                supportingContent = "短按增加1小时，长按设为0小时",
+                supportingContent = "短按选择，长按设为0小时",
                 trailingContent = settingsViewModel.iptvSourceCacheTime.humanizeMs(),
-                onSelected = {
-                    settingsViewModel.iptvSourceCacheTime =
-                        (settingsViewModel.iptvSourceCacheTime + 1 * 1000 * 60 * 60) % (1000 * 60 * 60 * 24)
-                },
+                onSelected = { showDialog = true },
                 onLongSelected = {
                     settingsViewModel.iptvSourceCacheTime = 0
                 },
+            )
+
+            LeanbackSettingsValueSelectDialog(
+                showDialogProvider = { showDialog },
+                onDismissRequest = { showDialog = false },
+                title = "直播源缓存时间",
+                options = listOf(0L, 1L, 2L, 3L, 6L, 12L, 24L, 48L, 72L).map {
+                    (if (it == 0L) "不缓存" else "${it}小时") to it * 1000 * 60 * 60
+                },
+                currentValueProvider = { settingsViewModel.iptvSourceCacheTime },
+                onSelected = { settingsViewModel.iptvSourceCacheTime = it },
             )
         }
 
@@ -161,6 +172,9 @@ fun LeanbackSettingsCategoryIptv(
                     if (settingsViewModel.iptvSourceUrl != it) {
                         settingsViewModel.iptvSourceUrl = it
                         coroutineScope.launch { IptvRepository().clearCache() }
+                        // 与网页推送路径对齐：软重启使新源生效
+                        LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                        LeanbackToastState.I.showToast("直播源已切换，正在刷新...")
                     }
                 },
                 onDeleted = {
@@ -186,12 +200,25 @@ fun LeanbackSettingsCategoryIptv(
         }
 
         item {
+            var showConfirm by remember { mutableStateOf(false) }
+
             LeanbackSettingsCategoryListItem(
                 headlineContent = "清除缓存",
-                supportingContent = "短按清除直播源缓存文件、可播放域名列表",
-                onSelected = {
+                supportingContent = "清除直播源/节目单缓存和可播放域名记忆（需二次确认）",
+                onSelected = { showConfirm = true },
+            )
+
+            LeanbackSettingsConfirmDialog(
+                showDialogProvider = { showConfirm },
+                onDismissRequest = { showConfirm = false },
+                title = "清除缓存",
+                text = "将清除直播源缓存、节目单缓存和可播放域名记忆，下次启动重新拉取。确定继续吗？",
+                onConfirm = {
                     settingsViewModel.iptvPlayableHostList = emptySet()
-                    coroutineScope.launch { IptvRepository().clearCache() }
+                    coroutineScope.launch {
+                        IptvRepository().clearCache()
+                        top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearCache()
+                    }
                     LeanbackToastState.I.showToast("清除缓存成功")
                 },
             )
@@ -357,7 +384,7 @@ private fun LeanbackSettingsIptvGroupVisibleDialog(
         onDismissRequest = {
             if (changed) {
                 LeanbackToastState.I.showToast("分组显示已更新，正在刷新...")
-                top.yogiczy.mytv.ui.utils.LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
             }
             onDismissRequest()
         },

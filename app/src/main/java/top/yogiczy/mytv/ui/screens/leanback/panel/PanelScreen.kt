@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,6 +46,7 @@ import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelIptvIn
 import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelPlayerInfo
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
@@ -82,7 +82,7 @@ fun LeanbackPanelScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.background.copy(alpha = LeanbackAlpha.Scrim))
             .pointerInput(Unit) { detectTapGestures(onTap = { onClose() }) },
     ) {
         val channelNoProvider = remember {
@@ -111,6 +111,7 @@ fun LeanbackPanelScreen(
             onPlayCatchup = onPlayCatchup,
             onIptvFocused = onIptvFocused,
             onClose = onClose,
+            onUserAction = { autoCloseState.active() },
         )
     }
 }
@@ -136,7 +137,7 @@ fun LeanbackPanelScreenTopRight(
             Box(modifier = Modifier.padding(horizontal = 8.dp)) {
                 Spacer(
                     modifier = Modifier
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.onBackground)
                         .width(2.dp)
                         .height(30.dp),
                 )
@@ -167,6 +168,7 @@ private fun LeanbackPanelScreenBottom(
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onIptvFocused: (Iptv) -> Unit = {},
     onClose: () -> Unit = {},
+    onUserAction: () -> Unit = {},
 ) {
     val childPadding = rememberLeanbackChildPadding()
     val epgList = epgListProvider()
@@ -206,6 +208,7 @@ private fun LeanbackPanelScreenBottom(
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
                 onPlayCatchup = onPlayCatchup,
                 onIptvFocused = onIptvFocused,
+                onUserAction = onUserAction,
             )
         }
     }
@@ -226,6 +229,7 @@ fun LeanbackPanelScreenBottomIptvList(
     onIptvFavoriteToggle: (Iptv) -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onIptvFocused: (Iptv) -> Unit = {},
+    onUserAction: () -> Unit = {},
 ) {
     val iptvFavoriteEnable = iptvFavoriteEnableProvider()
     var favoriteListVisible by remember { mutableStateOf(iptvFavoriteListVisibleProvider()) }
@@ -268,6 +272,7 @@ fun LeanbackPanelScreenBottomIptvList(
                 onIptvFavoriteToggle = onIptvFavoriteToggle,
                 onPlayCatchup = onPlayCatchup,
                 onClose = onFavoriteListClose,
+                onUserAction = onUserAction,
             )
         else
             LeanbackPanelIptvGroupList(
@@ -280,6 +285,7 @@ fun LeanbackPanelScreenBottomIptvList(
                 onPlayCatchup = onPlayCatchup,
                 onToFavorite = onToFavorite,
                 onIptvFocused = onIptvFocused,
+                onUserAction = onUserAction,
             )
 
         // 触摸设备进入收藏列表的入口（遥控器是按上键）
@@ -287,11 +293,11 @@ fun LeanbackPanelScreenBottomIptvList(
             Text(
                 text = "收藏",
                 style = MaterialTheme.typography.labelMedium,
-                color = LocalContentColor.current.copy(alpha = 0.8f),
+                color = LocalContentColor.current.copy(alpha = LeanbackAlpha.ContentHigh),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .background(
-                        LocalContentColor.current.copy(alpha = 0.2f),
+                        LocalContentColor.current.copy(alpha = LeanbackAlpha.TouchBackground),
                         MaterialTheme.shapes.small,
                     )
                     .tvTouchClickable(onClick = onToFavorite)

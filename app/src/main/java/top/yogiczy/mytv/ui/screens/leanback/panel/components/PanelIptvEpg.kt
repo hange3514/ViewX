@@ -35,7 +35,10 @@ import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.indexOfCurrent
 import top.yogiczy.mytv.data.entities.Iptv
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
+import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
+import top.yogiczy.mytv.ui.screens.leanback.components.LeanbackEmptyListItem
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
@@ -103,8 +106,8 @@ fun LeanbackPanelIptvEpgDialog(
                             }
 
                             CompositionLocalProvider(
-                                LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-                                else MaterialTheme.colorScheme.onBackground
+                                LocalContentColor provides if (isFocused) LeanbackFocusedContentColor
+                                else LeanbackFocusedContainerColor
                             ) {
                                 val onSelectAction = {
                                     if (isReplayable) {
@@ -131,7 +134,10 @@ fun LeanbackPanelIptvEpgDialog(
                                     colors = ListItemDefaults.colors(
                                         containerColor = Color.Transparent,
                                         focusedContainerColor = MaterialTheme.colorScheme.onBackground,
-                                        selectedContainerColor = Color.Transparent,
+                                        // 与经典面板一致：正在直播的节目显示选中底色
+                                        selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                            alpha = 0.5f
+                                        ),
                                     ),
                                     selected = isLive,
                                     onClick = onSelectAction,
@@ -168,35 +174,8 @@ fun LeanbackPanelIptvEpgDialog(
                         }
                     } else {
                         item {
-                            var isFocused by remember { mutableStateOf(false) }
-                            val focusRequester = remember { FocusRequester() }
-                            LaunchedEffect(Unit) {
-                                focusRequester.requestFocus()
-                            }
-
-                            CompositionLocalProvider(
-                                LocalContentColor provides if (isFocused) MaterialTheme.colorScheme.background
-                                else MaterialTheme.colorScheme.onBackground
-                            ) {
-                                androidx.tv.material3.ListItem(
-                                    modifier = Modifier
-                                        .focusRequester(focusRequester)
-                                        .onFocusChanged { isFocused = it.isFocused || it.hasFocus },
-                                    colors = ListItemDefaults.colors(
-                                        containerColor = Color.Transparent,
-                                        focusedContainerColor = MaterialTheme.colorScheme.onBackground,
-                                        selectedContainerColor = Color.Transparent,
-                                    ),
-                                    selected = true,
-                                    onClick = { },
-                                    headlineContent = {
-                                        Text(
-                                            text = "当前频道暂无节目",
-                                            maxLines = 1,
-                                        )
-                                    },
-                                )
-                            }
+                            // 统一空态组件：不可聚焦、无选中态
+                            LeanbackEmptyListItem(text = "当前频道暂无节目")
                         }
                     }
                 }
