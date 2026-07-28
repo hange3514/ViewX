@@ -3,7 +3,11 @@ package top.yogiczy.mytv.ui.screens.leanback.settings.components
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.window.DialogProperties
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
@@ -21,6 +25,9 @@ fun LeanbackSettingsConfirmDialog(
 ) {
     if (!showDialogProvider()) return
 
+    val confirmFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { confirmFocusRequester.requestFocus() }
+
     AlertDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = modifier,
@@ -31,10 +38,12 @@ fun LeanbackSettingsConfirmDialog(
                     onConfirm()
                     onDismissRequest()
                 },
-                modifier = Modifier.tvTouchClickable(onClick = {
-                    onConfirm()
-                    onDismissRequest()
-                }),
+                modifier = Modifier
+                    .focusRequester(confirmFocusRequester)
+                    .tvTouchClickable(onClick = {
+                        onConfirm()
+                        onDismissRequest()
+                    }),
             ) {
                 androidx.tv.material3.Text(text = "确定")
             }

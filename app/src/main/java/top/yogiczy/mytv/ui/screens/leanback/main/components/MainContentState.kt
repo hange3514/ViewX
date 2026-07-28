@@ -160,6 +160,13 @@ class LeanbackMainContentState(
     }
 
     private fun onActiveError() {
+        // 回放态的错误单独处理：切直播线路对回放源失败无意义，提示并退出回放
+        if (_isReplayMode) {
+            LeanbackToastState.I.showToast("回放播放失败，已退回直播")
+            exitReplayMode()
+            return
+        }
+
         // 先记录失败线路的域名，changeCurrentIptv 会更新 idx，
         // 之后再读 urlList[idx] 读到的是新线路，会误删好域名
         val failedUrlHost = getUrlHost(_currentIptv.urlList[_currentIptvUrlIdx])
@@ -177,6 +184,9 @@ class LeanbackMainContentState(
     private var cutoffRetryJob: Job? = null
 
     private fun onActiveCutoff() {
+        // 回放暂停中：位置冻结必触发断流检测，直接忽略，防止暂停被自动打穿
+        if (_isReplayMode && _isReplayPaused) return
+
         if (_isReplayMode && _replayProgramme != null) {
             val programme = _replayProgramme!!
             val now = System.currentTimeMillis()
@@ -186,8 +196,16 @@ class LeanbackMainContentState(
                 // 当前回放片段播完，按时间顺序接续下一片段
                 playNextProgrammeOrExit()
             } else {
-                // 未播完却被判定断流，按当前位置重试
-                log.d("回放断流，按当前位置重试: ${programme.title}")
+                // 回放断流重试：与直播同样限次，超限退出回放
+                if (cutoffRetryCount >= 5) {
+                    log.d("回放断流重试超过上限，退出回放")
+                    cutoffRetryCount = 0
+                    LeanbackToastState.I.showToast("回放播放失败，已退回直播")
+                    exitReplayMode()
+                    return
+                }
+                cutoffRetryCount++
+                log.d("回放断流，按当前位置重试（第${cutoffRetryCount}次）: ${programme.title}")
                 seekToProgramme(programme, positionMs.coerceIn(0, max(0, totalDuration)))
             }
         } else {
@@ -342,6 +360,9 @@ class LeanbackMainContentState(
     fun changeCurrentIptv(iptv: Iptv, urlIdx: Int? = null) {
         _isPanelVisible = false
 
+        // 用户主动换台，取消进行中的断流退避重连，避免延迟回调覆盖用户选择
+        cutoffRetryJob?.cancel()
+
         // 无可用线路的频道（如空源/解析异常）直接忽略，防止下标越界
         if (iptv.urlList.isEmpty()) return
 
@@ -442,6 +463,9 @@ class LeanbackMainContentState(
         if (!SP.epgReplayEnable) return
         if (iptv.catchupSource.isBlank()) return
 
+        // 进入回放前取消进行中的断流退避重连，防止延迟回调把用户踢出回放
+        cutoffRetryJob?.cancel()
+
         val now = System.currentTimeMillis()
         // 已播节目按结束时间回看；正在直播的节目按当前时间时移回看
         if (programme.startAt > now) return
@@ -499,9 +523,10 @@ class LeanbackMainContentState(
     }
 
     /**
-     * 应用退到后台：暂停全部播放器（含待机）
+     * 应用退到后台：暂停全部播放器（含待机），并取消断流退避重连
      */
     fun pauseAllPlayers() {
+        cutoffRetryJob?.cancel()
         playerStates.forEach { it.pause() }
     }
 

@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 
 @Composable
@@ -27,7 +28,7 @@ fun LeanbackVideoPlayerErrorScreen(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .background(
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurface),
                         shape = MaterialTheme.shapes.medium,
                     )
                     .padding(horizontal = 20.dp, vertical = 10.dp),

@@ -46,7 +46,8 @@ fun LeanbackSettingsCategoryList(
             val isSelected by remember { derivedStateOf { focusedCategoryProvider() == category } }
             val focusRequester = remember { FocusRequester() }
             LaunchedEffect(Unit) {
-                if (index == 0 && !hasFocused) {
+                // 初始焦点落在恢复的（上次停留的）分类上，而不是写死第一项
+                if (!hasFocused && focusedCategoryProvider() == category) {
                     focusRequester.requestFocus()
                     hasFocused = true
                 }

@@ -95,7 +95,8 @@ fun LeanbackMainContent(
                 SP.VideoPlayerAspectRatio.SIXTEEN_NINE -> 16f / 9f
                 SP.VideoPlayerAspectRatio.FOUR_THREE -> 4f / 3f
                 SP.VideoPlayerAspectRatio.AUTO -> {
-                    configuration.screenHeightDp.toFloat() / configuration.screenWidthDp.toFloat()
+                    // aspectRatio 语义是宽/高，自动拉伸应取屏幕宽÷高
+                    configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
                 }
             }
         }

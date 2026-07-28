@@ -244,6 +244,8 @@ class LeanbackMedia3VideoPlayer(
     }
 
     override fun pause() {
+        // 暂停时撤销卡死检测，否则暂停超过超时会被误判断流
+        resetCutoff()
         videoPlayer.pause()
     }
 

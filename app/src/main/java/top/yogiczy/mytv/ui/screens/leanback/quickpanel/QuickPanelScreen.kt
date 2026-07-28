@@ -79,7 +79,7 @@ fun LeanbackQuickPanelScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.Scrim))
             .focusRequester(focusRequester)
             .handleLeanbackUserAction { autoCloseState.active() }
             .pointerInput(Unit) { detectTapGestures(onTap = { onClose() }) },

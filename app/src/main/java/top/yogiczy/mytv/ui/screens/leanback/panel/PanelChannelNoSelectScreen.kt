@@ -56,34 +56,44 @@ class LeanbackPanelChannelNoSelectState(
     private var _channelNo by mutableStateOf(initialChannelNo)
     val channelNo get() = _channelNo
 
+    private var generation = 0
+
     fun input(no: Int) {
         // 限制最大长度，防止连按数字导致 confirm 时 toInt 溢出崩溃
         if (_channelNo.length >= MAX_CHANNEL_NO_LENGTH) return
         _channelNo += no.toString()
-        channel.trySend(_channelNo)
+        channel.trySend(++generation)
     }
 
     /** 按 OK 立即确认，跳过等待倒计时 */
     fun confirm() {
+        generation++ // 作废倒计时里残留的待确认值
         if (_channelNo.isNotEmpty()) {
             onChannelNoConfirm(_channelNo)
             _channelNo = ""
         }
     }
 
-    /** 按返回取消本次输入 */
+    /** 按返回取消本次输入（同时作废已进入倒计时的值） */
     fun cancel() {
+        generation++
         _channelNo = ""
     }
 
-    private val channel = Channel<String>(Channel.CONFLATED)
+    private val channel = Channel<Int>(Channel.CONFLATED)
 
     @OptIn(FlowPreview::class)
     suspend fun observe() {
-        channel.consumeAsFlow().debounce { (4 - it.length).coerceAtLeast(0) * 1000L }.collect {
-            onChannelNoConfirm(it)
-            _channelNo = ""
-        }
+        channel.consumeAsFlow()
+            .debounce { (4 - _channelNo.length).coerceAtLeast(0) * 1000L }
+            .collect { gen ->
+                // 倒计时结束时校验世代，取消/确认过的输入不再生效
+                if (gen == generation && _channelNo.isNotEmpty()) {
+                    val no = _channelNo
+                    _channelNo = ""
+                    onChannelNoConfirm(no)
+                }
+            }
     }
 }
 

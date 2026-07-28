@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,11 @@ fun <T> LeanbackSettingsValueSelectDialog(
                     val (label, value) = options[index]
                     val focusRequester = remember { FocusRequester() }
                     var isFocused by remember { mutableStateOf(false) }
+
+                    // 打开即聚焦当前选中项（遥控器可直接操作）
+                    LaunchedEffect(Unit) {
+                        if (value == currentValue) focusRequester.requestFocus()
+                    }
 
                     androidx.tv.material3.ListItem(
                         modifier = Modifier

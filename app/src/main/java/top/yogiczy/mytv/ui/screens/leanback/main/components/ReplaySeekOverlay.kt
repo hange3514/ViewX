@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.entities.EpgProgramme
+import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import java.text.SimpleDateFormat
@@ -109,7 +110,7 @@ fun LeanbackReplayControlBar(
                         .fillMaxWidth()
                         .padding(horizontal = 60.dp, vertical = 40.dp)
                         .background(
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                            MaterialTheme.colorScheme.background.copy(alpha = LeanbackAlpha.PanelSurface),
                             shape = MaterialTheme.shapes.medium,
                         )
                         // 触摸点按控制条 = 暂停/继续
@@ -153,7 +154,7 @@ fun LeanbackReplayControlBar(
                                 .onFocusChanged { exitFocused = it.isFocused || it.hasFocus }
                                 .background(
                                     if (exitFocused) LocalContentColor.current
-                                    else LocalContentColor.current.copy(alpha = 0.2f),
+                                    else LocalContentColor.current.copy(alpha = LeanbackAlpha.TouchBackground),
                                     MaterialTheme.shapes.small,
                                 )
                                 .focusable()
@@ -208,7 +209,7 @@ fun LeanbackReplayControlBar(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .background(
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                                    MaterialTheme.colorScheme.onBackground.copy(alpha = LeanbackAlpha.BadgeBackground),
                                     MaterialTheme.shapes.small,
                                 ),
                         )
