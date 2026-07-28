@@ -105,13 +105,14 @@ fun LeanbackMainContent(
     val videoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
     )
-    // 待机播放器×2：静音、小缓冲，用于换台预缓冲（上下两个方向）；命中时轮换角色
+    // 待机播放器×2：静音、小缓冲、prepare 后即挂起不解码，用于换台预缓冲（上下两个方向）；命中时轮换角色
     val standbyVideoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
         minBufferMs = 5_000,
         maxBufferMs = 5_000,
         bufferForPlaybackMs = 500,
         bufferForPlaybackAfterRebufferMs = 1_000,
+        initialPlayWhenReady = false,
     )
     val extraStandbyVideoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
@@ -119,6 +120,7 @@ fun LeanbackMainContent(
         maxBufferMs = 5_000,
         bufferForPlaybackMs = 500,
         bufferForPlaybackAfterRebufferMs = 1_000,
+        initialPlayWhenReady = false,
     )
     // EPG 是异步加载的，用 rememberUpdatedState 保证 state 内读取到的始终是最新节目单
     val latestEpgList by rememberUpdatedState(epgList)

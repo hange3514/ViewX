@@ -16,6 +16,7 @@ class LeanbackCompositeVideoPlayer(
     maxBufferMs: Int = 120_000,
     bufferForPlaybackMs: Int = 2_000,
     bufferForPlaybackAfterRebufferMs: Int = 3_000,
+    initialPlayWhenReady: Boolean = true,
 ) : LeanbackVideoPlayer(coroutineScope) {
 
     private val media3Player = LeanbackMedia3VideoPlayer(
@@ -25,6 +26,7 @@ class LeanbackCompositeVideoPlayer(
         maxBufferMs = maxBufferMs,
         bufferForPlaybackMs = bufferForPlaybackMs,
         bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
+        initialPlayWhenReady = initialPlayWhenReady,
     )
 
     override fun initialize() {

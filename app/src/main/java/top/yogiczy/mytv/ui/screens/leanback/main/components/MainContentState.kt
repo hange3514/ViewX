@@ -251,11 +251,7 @@ class LeanbackMainContentState(
             log.d("待机播放器恢复稳定，重新启用双向预缓冲")
             _dualStandbyAvailable = true
         }
-        coroutineScope.launch {
-            delay(2000)
-            // 期间若已被提升为活跃播放器则不处理
-            if (state != activePlayer) state.pause()
-        }
+        // 待机播放器 prepare 时 playWhenReady=false，只缓冲不解码，无需再冻结
     }
 
     /**
@@ -407,13 +403,14 @@ class LeanbackMainContentState(
             playerStates[hitIndex].error == null // 处于错误态的播放器不走捷径，改走正常 prepare
         ) {
             // 命中预缓冲：交换主备角色，待机播放器直接出画面（秒切）；
-            // 旧活跃播放器保留刚切走的频道内容，往回翻台也能秒切
+            // 旧活跃播放器保留刚切走的频道内容并立即冻结（不解码），往回翻台也能秒切
             val oldActive = activePlayer
             _activePlayerIndex = hitIndex
             val newActive = activePlayer
             newActive.setVolume(1f)
             newActive.play()
             oldActive.setVolume(0f)
+            oldActive.pause()
             log.d("命中预缓冲，主备交换（活跃播放器=$_activePlayerIndex）")
             // 交换来的播放器早已 ready（play 不会再触发 onReady），
             // 手动补一次，否则左下角信息条永远不会自动隐藏

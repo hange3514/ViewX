@@ -123,6 +123,7 @@ fun rememberLeanbackVideoPlayerState(
     maxBufferMs: Int = 120_000,
     bufferForPlaybackMs: Int = 2_000,
     bufferForPlaybackAfterRebufferMs: Int = 3_000,
+    initialPlayWhenReady: Boolean = true,
 ): LeanbackVideoPlayerState {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -137,6 +138,7 @@ fun rememberLeanbackVideoPlayerState(
                 maxBufferMs = maxBufferMs,
                 bufferForPlaybackMs = bufferForPlaybackMs,
                 bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
+                initialPlayWhenReady = initialPlayWhenReady,
             ),
             defaultAspectRatioProvider = { latestAspectRatioProvider() },
         )

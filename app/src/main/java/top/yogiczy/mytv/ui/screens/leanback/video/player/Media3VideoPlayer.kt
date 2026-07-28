@@ -37,6 +37,7 @@ class LeanbackMedia3VideoPlayer(
     maxBufferMs: Int = 120_000,
     bufferForPlaybackMs: Int = 2_000,
     bufferForPlaybackAfterRebufferMs: Int = 3_000,
+    initialPlayWhenReady: Boolean = true,
 ) : LeanbackVideoPlayer(coroutineScope) {
     // EXTENSION_RENDERER_MODE_ON 让 FFmpeg 扩展解码器参与选择；
     // 当前 lib-decoder-ffmpeg-release.aar 提供音频解码器，用于 MPEG-L2 等 Android 原生不支持的音轨。
@@ -54,7 +55,9 @@ class LeanbackMedia3VideoPlayer(
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
     ).build().apply {
-        playWhenReady = true
+        // 待机播放器传 false：prepare 后只缓冲不解码，
+        // 避免与主播放器争抢弱设备上的硬解带宽（间歇马赛克根因）
+        playWhenReady = initialPlayWhenReady
     }
 
     private val contentTypeAttempts = mutableMapOf<Int, Boolean>()
