@@ -31,11 +31,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyListState
 import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.ExperimentalTvFoundationApi
+import androidx.tv.foundation.PivotOffsets
 import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
@@ -56,6 +59,7 @@ import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberCurrentProgramme
 import kotlin.math.max
 
+@OptIn(ExperimentalTvFoundationApi::class)
 @Composable
 fun LeanbackClassicPanelIptvList(
     modifier: Modifier = Modifier,
@@ -109,6 +113,7 @@ fun LeanbackClassicPanelIptvList(
 
     TvLazyColumn(
         state = listState,
+        pivotOffsets = PivotOffsets(parentFraction = 0.45f),
         contentPadding = PaddingValues(8.dp),
         verticalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
         modifier = modifier
@@ -118,7 +123,7 @@ fun LeanbackClassicPanelIptvList(
     ) {
         itemsIndexed(
             items = iptvList,
-            key = { _, iptv -> iptv.urlList.firstOrNull() ?: iptv.name },
+            key = { index, iptv -> "$index:${iptv.name}" },
         ) { index, iptv ->
             val isSelected by remember { derivedStateOf { iptv == focusedIptv } }
             val initialFocused by remember {
@@ -221,13 +226,14 @@ private fun LeanbackClassicPanelIptvItem(
                 ),
                 selected = isSelectedProvider(),
                 headlineContent = {
-                    Text(text = iptv.name, maxLines = 2)
+                    Text(text = iptv.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 },
                 supportingContent = {
                     Text(
                         text = currentProgramme?.title ?: "无节目",
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.alpha(0.8f),
                     )
                 },
@@ -236,7 +242,12 @@ private fun LeanbackClassicPanelIptvItem(
             if (showProgrammeProgressProvider() && currentProgramme != null) {
                 ProgrammeProgressIndicator(
                     programme = currentProgramme,
-                    modifier = Modifier.align(Alignment.BottomStart),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, end = 12.dp, bottom = 3.dp)
+                        .height(2.dp),
+                    color = if (isFocused) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                 )
             }
         }

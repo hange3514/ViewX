@@ -116,7 +116,7 @@ fun LeanbackPanelIptvFavoriteList(
         ) {
             itemsIndexed(
                 items = iptvList,
-                key = { _, iptv -> iptv.urlList.firstOrNull() ?: iptv.name },
+                key = { index, iptv -> "$index:${iptv.name}" },
             ) { index, iptv ->
                 val onSelected = remember(iptv) { { onIptvSelected(iptv) } }
                 val onFavoriteToggle = remember(iptv) { { onIptvFavoriteToggle(iptv) } }
@@ -161,11 +161,12 @@ fun LeanbackPanelIptvFavoriteList(
         modifier = Modifier
             .handleLeanbackKeyEvents(
                 onLeft = {
-                    currentShowEpgIptv = iptvList[max(0, iptvList.indexOf(currentShowEpgIptv) - 1)]
+                    iptvList.getOrNull(max(0, iptvList.indexOf(currentShowEpgIptv) - 1))
+                        ?.let { currentShowEpgIptv = it }
                 },
                 onRight = {
-                    currentShowEpgIptv =
-                        iptvList[min(iptvList.size - 1, iptvList.indexOf(currentShowEpgIptv) + 1)]
+                    iptvList.getOrNull(min(iptvList.size - 1, iptvList.indexOf(currentShowEpgIptv) + 1))
+                        ?.let { currentShowEpgIptv = it }
                 },
             ),
         onUserAction = onUserAction,

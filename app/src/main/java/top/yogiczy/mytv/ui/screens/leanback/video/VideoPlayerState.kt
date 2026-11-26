@@ -6,7 +6,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,15 +29,37 @@ class LeanbackVideoPlayerState(
     /** 错误 */
     var error by mutableStateOf<String?>(null)
 
+    internal var isReady = false
+        private set
+
+    var hasRenderedFirstFrame by mutableStateOf(false)
+        private set
+    private var audioOnlyStarted by mutableStateOf(false)
+    val hasStartedPlayback get() = hasRenderedFirstFrame || audioOnlyStarted
+
     /** 元数据 */
     var metadata by mutableStateOf(LeanbackVideoPlayer.Metadata())
 
     /** 当前播放位置（毫秒） */
-    var currentPositionMs by mutableLongStateOf(0L)
+    val currentPositionMs get() = instance.currentPositionMs
+    val bufferedDurationMs get() = instance.bufferedDurationMs
+    val isPlaying get() = instance.isPlaying
+    val hasLivePreload get() = instance.hasLivePreload
 
     fun prepare(url: String) {
         error = null
+        resetPlaybackReadiness()
         instance.prepare(url)
+    }
+
+    fun preloadLive(url: String) = instance.preloadLive(url)
+
+    fun cancelLivePreload() = instance.cancelLivePreload()
+
+    fun prepareLive(url: String, allowPreload: Boolean): Boolean {
+        error = null
+        resetPlaybackReadiness()
+        return instance.prepareLive(url, allowPreload)
     }
 
     fun play() {
@@ -49,12 +70,13 @@ class LeanbackVideoPlayerState(
         instance.pause()
     }
 
-    /** 音量（0.0~1.0） */
-    fun setVolume(volume: Float) {
-        instance.setVolume(volume)
+    fun stop() {
+        resetPlaybackReadiness()
+        instance.stop()
     }
 
     fun setVideoSurfaceView(surfaceView: SurfaceView) {
+        hasRenderedFirstFrame = false
         instance.setVideoSurfaceView(surfaceView)
     }
 
@@ -67,11 +89,18 @@ class LeanbackVideoPlayerState(
     }
 
     private val onReadyListeners = mutableListOf<() -> Unit>()
+    private val onBufferingListeners = mutableListOf<() -> Unit>()
     private val onErrorListeners = mutableListOf<() -> Unit>()
     private val onCutoffListeners = mutableListOf<() -> Unit>()
+    private val onEndedListeners = mutableListOf<() -> Unit>()
+    private val onFirstFrameListeners = mutableListOf<(Long) -> Unit>()
 
     fun onReady(listener: () -> Unit) {
         onReadyListeners.add(listener)
+    }
+
+    fun onBuffering(listener: () -> Unit) {
+        onBufferingListeners.add(listener)
     }
 
     fun onError(listener: () -> Unit) {
@@ -80,6 +109,20 @@ class LeanbackVideoPlayerState(
 
     fun onCutoff(listener: () -> Unit) {
         onCutoffListeners.add(listener)
+    }
+
+    fun onEnded(listener: () -> Unit) {
+        onEndedListeners.add(listener)
+    }
+
+    fun onFirstFrame(listener: (renderTimeMs: Long) -> Unit) {
+        onFirstFrameListeners.add(listener)
+    }
+
+    private fun resetPlaybackReadiness() {
+        isReady = false
+        hasRenderedFirstFrame = false
+        audioOnlyStarted = false
     }
 
     fun initialize() {
@@ -97,21 +140,47 @@ class LeanbackVideoPlayerState(
             error = if (ex != null) "${ex.errorCodeName}(${ex.errorCode})"
             else null
 
-            if (error != null) onErrorListeners.forEach { it.invoke() }
-
+            if (error != null) {
+                isReady = false
+                onErrorListeners.forEach { it.invoke() }
+            }
         }
-        instance.onReady { onReadyListeners.forEach { it.invoke() } }
-        instance.onBuffering { if (it) error = null }
-        instance.onPrepared { }
+        instance.onReady {
+            error = null
+            isReady = true
+            audioOnlyStarted = !instance.hasVideoTrack
+            onReadyListeners.forEach { it.invoke() }
+        }
+        instance.onBuffering {
+            if (it) {
+                error = null
+                isReady = false
+                onBufferingListeners.forEach { it.invoke() }
+            }
+        }
+        instance.onPrepared { resetPlaybackReadiness() }
         instance.onMetadata { metadata = it }
-        instance.onCutoff { onCutoffListeners.forEach { it.invoke() } }
-        instance.onCurrentPosition { currentPositionMs = it }
+        instance.onCutoff {
+            isReady = false
+            onCutoffListeners.forEach { it.invoke() }
+        }
+        instance.onEnded {
+            isReady = false
+            onEndedListeners.forEach { it.invoke() }
+        }
+        instance.onFirstFrame { renderTimeMs ->
+            hasRenderedFirstFrame = true
+            onFirstFrameListeners.forEach { it(renderTimeMs) }
+        }
     }
 
     fun release() {
         onReadyListeners.clear()
+        onBufferingListeners.clear()
         onErrorListeners.clear()
         onCutoffListeners.clear()
+        onEndedListeners.clear()
+        onFirstFrameListeners.clear()
         instance.release()
     }
 }
@@ -119,11 +188,6 @@ class LeanbackVideoPlayerState(
 @Composable
 fun rememberLeanbackVideoPlayerState(
     defaultAspectRatioProvider: () -> Float? = { null },
-    minBufferMs: Int = 60_000,
-    maxBufferMs: Int = 120_000,
-    bufferForPlaybackMs: Int = 2_000,
-    bufferForPlaybackAfterRebufferMs: Int = 3_000,
-    initialPlayWhenReady: Boolean = true,
 ): LeanbackVideoPlayerState {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -134,11 +198,6 @@ fun rememberLeanbackVideoPlayerState(
             LeanbackCompositeVideoPlayer(
                 context = context,
                 coroutineScope = coroutineScope,
-                minBufferMs = minBufferMs,
-                maxBufferMs = maxBufferMs,
-                bufferForPlaybackMs = bufferForPlaybackMs,
-                bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
-                initialPlayWhenReady = initialPlayWhenReady,
             ),
             defaultAspectRatioProvider = { latestAspectRatioProvider() },
         )

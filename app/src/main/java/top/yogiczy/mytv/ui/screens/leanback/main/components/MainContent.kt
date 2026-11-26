@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -38,7 +39,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import top.yogiczy.mytv.AppGlobal
 import top.yogiczy.mytv.data.entities.EpgList
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.Iptv
@@ -60,13 +60,13 @@ import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.screens.leanback.update.LeanbackUpdateScreen
 import top.yogiczy.mytv.ui.screens.leanback.video.LeanbackVideoScreen
 import top.yogiczy.mytv.ui.screens.leanback.video.rememberLeanbackVideoPlayerState
+import top.yogiczy.mytv.ui.utils.LiveSettingsBus
 import top.yogiczy.mytv.ui.utils.SP
 import top.yogiczy.mytv.ui.utils.handleLeanbackDragGestures
 import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 
 private const val REPLAY_SEEK_OFFSET_MS = 30_000L
 private const val REPLAY_SEEK_CONTINUOUS_OFFSET_MS = 10_000L
-private const val REPLAY_SEEK_CONTINUOUS_INITIAL_DELAY_MS = 400L
 private const val REPLAY_SEEK_CONTINUOUS_INTERVAL_MS = 200L
 
 /** 回放模式下双击返回键退出的间隔窗口 */
@@ -105,51 +105,19 @@ fun LeanbackMainContent(
     val videoPlayerState = rememberLeanbackVideoPlayerState(
         defaultAspectRatioProvider = defaultAspectRatioProvider,
     )
-    // 待机播放器×2：静音、小缓冲、prepare 后即挂起不解码，用于换台预缓冲（上下两个方向）；命中时轮换角色
-    val standbyVideoPlayerState = rememberLeanbackVideoPlayerState(
-        defaultAspectRatioProvider = defaultAspectRatioProvider,
-        minBufferMs = 5_000,
-        maxBufferMs = 5_000,
-        bufferForPlaybackMs = 500,
-        bufferForPlaybackAfterRebufferMs = 1_000,
-        initialPlayWhenReady = false,
-    )
-    val extraStandbyVideoPlayerState = rememberLeanbackVideoPlayerState(
-        defaultAspectRatioProvider = defaultAspectRatioProvider,
-        minBufferMs = 5_000,
-        maxBufferMs = 5_000,
-        bufferForPlaybackMs = 500,
-        bufferForPlaybackAfterRebufferMs = 1_000,
-        initialPlayWhenReady = false,
-    )
     // EPG 是异步加载的，用 rememberUpdatedState 保证 state 内读取到的始终是最新节目单
     val latestEpgList by rememberUpdatedState(epgList)
     val mainContentState = rememberLeanbackMainContentState(
         videoPlayerState = videoPlayerState,
-        standbyVideoPlayerState = standbyVideoPlayerState,
-        extraStandbyVideoPlayerState = extraStandbyVideoPlayerState,
         iptvGroupList = iptvGroupList,
         epgListProvider = { latestEpgList },
     )
-    val activeVideoPlayerState = when (mainContentState.activePlayerIndex) {
-        0 -> videoPlayerState
-        1 -> standbyVideoPlayerState
-        else -> extraStandbyVideoPlayerState
+    val prebufferEnabled = settingsViewModel.iptvPrebufferEnable
+    LaunchedEffect(mainContentState, prebufferEnabled) {
+        mainContentState.setPrebufferEnabled(prebufferEnabled)
     }
 
-    // 生命周期统一管理：退后台暂停全部播放器，回前台只恢复活跃播放器
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_STOP -> mainContentState.pauseAllPlayers()
-                Lifecycle.Event.ON_RESUME -> mainContentState.resumeActivePlayer()
-                else -> {}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
     val panelChannelNoSelectState = rememberLeanbackPanelChannelNoSelectState(
         onChannelNoConfirm = {
             val channelNo = it.toIntOrNull()?.let { no -> no - 1 } ?: -1
@@ -194,14 +162,16 @@ fun LeanbackMainContent(
 
     val seekJob = remember { mutableStateOf<Job?>(null) }
     fun startContinuousSeek(offsetMs: Long) {
-        if (!mainContentState.isReplayMode) return
+        if (!noOverlayVisible || !mainContentState.isReplayMode) return
         seekJob.value?.cancel()
+        mainContentState.seekReplay(offsetMs)
+        showReplayBar()
         seekJob.value = coroutineScope.launch {
-            delay(REPLAY_SEEK_CONTINUOUS_INITIAL_DELAY_MS)
-            while (isActive) {
+            while (isActive && noOverlayVisible && mainContentState.isReplayMode) {
+                delay(REPLAY_SEEK_CONTINUOUS_INTERVAL_MS)
+                if (!noOverlayVisible || !mainContentState.isReplayMode) break
                 mainContentState.seekReplay(offsetMs)
                 showReplayBar()
-                delay(REPLAY_SEEK_CONTINUOUS_INTERVAL_MS)
             }
         }
     }
@@ -210,24 +180,53 @@ fun LeanbackMainContent(
         seekJob.value = null
     }
 
-    // 长按上/下方向键连续换台（与传统电视翻台习惯一致）
+    // 收到遥控器的长按事件才开始连翻，避免短按松手时额外切一台。
     val flipJob = remember { mutableStateOf<Job?>(null) }
     fun startContinuousFlip(direction: Int) {
         if (!noOverlayVisible) return
         flipJob.value?.cancel()
+        fun flip() {
+            if (direction > 0) mainContentState.changeCurrentIptvToNext()
+            else mainContentState.changeCurrentIptvToPrev()
+        }
+        flip()
         flipJob.value = coroutineScope.launch {
-            delay(400)
-            // 浮层打开（如连翻中按 OK 出面板）即停止，防止失控连翻
             while (isActive && noOverlayVisible) {
-                if (direction > 0) mainContentState.changeCurrentIptvToNext()
-                else mainContentState.changeCurrentIptvToPrev()
                 delay(600)
+                if (noOverlayVisible) flip()
             }
         }
     }
     fun stopContinuousFlip() {
         flipJob.value?.cancel()
         flipJob.value = null
+    }
+
+    LaunchedEffect(noOverlayVisible, mainContentState.isReplayMode) {
+        if (!noOverlayVisible) {
+            stopContinuousFlip()
+            stopContinuousSeek()
+        }
+        if (!mainContentState.isReplayMode) {
+            stopContinuousSeek()
+            replayBarVisible.value = false
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    stopContinuousFlip()
+                    stopContinuousSeek()
+                    mainContentState.pausePlayback()
+                }
+                Lifecycle.Event.ON_RESUME -> mainContentState.resumeActivePlayer()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 稳定的状态提供者，避免父组件每次重组都产生新的 lambda
@@ -265,22 +264,10 @@ fun LeanbackMainContent(
     }
     // 主备轮换后活跃播放器会变，必须在调用时按角色动态取值，不能捕获固定实例
     val videoPlayerMetadataProvider = remember {
-        {
-            (when (mainContentState.activePlayerIndex) {
-                0 -> videoPlayerState
-                1 -> standbyVideoPlayerState
-                else -> extraStandbyVideoPlayerState
-            }).metadata
-        }
+        { videoPlayerState.metadata }
     }
     val videoPlayerAspectRatioProvider = remember {
-        {
-            (when (mainContentState.activePlayerIndex) {
-                0 -> videoPlayerState
-                1 -> standbyVideoPlayerState
-                else -> extraStandbyVideoPlayerState
-            }).aspectRatio
-        }
+        { videoPlayerState.aspectRatio }
     }
     val showMetadataProvider = remember(settingsViewModel.debugShowVideoPlayerMetadata) {
         { settingsViewModel.debugShowVideoPlayerMetadata }
@@ -312,18 +299,23 @@ fun LeanbackMainContent(
 
     // 回放模式下双击返回退出：记录第一次按返回的时间
     var lastReplayExitBackAt by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(mainContentState.isReplayMode) {
+        lastReplayExitBackAt = 0L
+    }
 
     val onBackPressedHandler = remember {
         {
             // 数字选台输入中按返回：取消本次输入
             if (panelChannelNoSelectState.channelNo.isNotEmpty()) panelChannelNoSelectState.cancel()
             // 优先关闭浮层，浮层都关闭后才处理退出回放/退出应用
-            else if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
             else if (mainContentState.isSettingsVisible) mainContentState.isSettingsVisible = false
             else if (mainContentState.isQuickPanelVisible) mainContentState.isQuickPanelVisible = false
+            else if (mainContentState.isPanelVisible) mainContentState.isPanelVisible = false
             else if (mainContentState.isReplayMode) {
                 val now = SystemClock.uptimeMillis()
-                if (now - lastReplayExitBackAt < REPLAY_EXIT_DOUBLE_BACK_INTERVAL_MS) {
+                if (lastReplayExitBackAt != 0L &&
+                    now - lastReplayExitBackAt < REPLAY_EXIT_DOUBLE_BACK_INTERVAL_MS
+                ) {
                     lastReplayExitBackAt = 0L
                     mainContentState.exitReplayMode()
                 } else {
@@ -355,7 +347,7 @@ fun LeanbackMainContent(
     val onIptvFavoriteListVisibleChange = remember {
         { visible: Boolean -> settingsViewModel.iptvChannelFavoriteListVisible = visible }
     }
-    val onClearCache = remember {
+    val onClearCache: () -> Unit = remember {
         {
             // 与设置页"清除缓存"范围一致：清直播源/节目单缓存和可播放域名记忆，
             // 不删缓存根目录（会连带删除下载中的更新包并导致缓存写入失败）
@@ -363,18 +355,15 @@ fun LeanbackMainContent(
             coroutineScope.launch {
                 top.yogiczy.mytv.data.repositories.iptv.IptvRepository().clearCache()
                 top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearAllCache()
+                LeanbackToastState.I.showToast("缓存已清除，正在刷新直播源")
+                LiveSettingsBus.requestIptvReload(forceRefresh = true)
             }
-            LeanbackToastState.I.showToast("清除缓存成功")
         }
     }
     val onChangeVideoPlayerAspectRatio =
         remember {
             { ratio: Float ->
-                (when (mainContentState.activePlayerIndex) {
-                    0 -> videoPlayerState
-                    1 -> standbyVideoPlayerState
-                    else -> extraStandbyVideoPlayerState
-                }).aspectRatio = ratio
+                videoPlayerState.aspectRatio = ratio
             }
         }
     val onIptvUrlIdxChange = remember {
@@ -454,23 +443,29 @@ fun LeanbackMainContent(
         onBackPressed = onBackPressedHandler,
     ) {
         LeanbackVideoScreen(
-            state = activeVideoPlayerState,
+            state = videoPlayerState,
             showMetadataProvider = showMetadataProvider,
             modifier = Modifier
                 .focusRequester(focusRequester)
-                .focusable()
+                .onFocusChanged {
+                    if (!it.hasFocus) {
+                        stopContinuousFlip()
+                        stopContinuousSeek()
+                    }
+                }
+                .focusable(enabled = noOverlayVisible)
                 .handleLeanbackKeyEvents(
                     onUp = onKeyUp,
-                    onUpDown = { startContinuousFlip(if (channelChangeFlipProvider()) 1 else -1) },
+                    onLongUp = { startContinuousFlip(if (channelChangeFlipProvider()) 1 else -1) },
                     onUpUp = { stopContinuousFlip() },
                     onDown = onKeyDown,
-                    onDownDown = { startContinuousFlip(if (channelChangeFlipProvider()) -1 else 1) },
+                    onLongDown = { startContinuousFlip(if (channelChangeFlipProvider()) -1 else 1) },
                     onDownUp = { stopContinuousFlip() },
                     onLeft = onKeyLeft,
-                    onLeftDown = { startContinuousSeek(-REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
+                    onLongLeft = { startContinuousSeek(-REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
                     onLeftUp = { stopContinuousSeek() },
                     onRight = onKeyRight,
-                    onRightDown = { startContinuousSeek(REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
+                    onLongRight = { startContinuousSeek(REPLAY_SEEK_CONTINUOUS_OFFSET_MS) },
                     onRightUp = { stopContinuousSeek() },
                     onSelect = {
                         if (panelChannelNoSelectState.channelNo.isNotEmpty()) {
@@ -489,9 +484,14 @@ fun LeanbackMainContent(
                             }
                         }
                     },
-                    onLongSelect = { if (noOverlayVisible) mainContentState.isQuickPanelVisible = true },
+                    onLongSelect = {
+                        if (noOverlayVisible && panelChannelNoSelectState.channelNo.isEmpty()) {
+                            mainContentState.isQuickPanelVisible = true
+                        }
+                    },
                     onSettings = onKeySettings,
                     onNumber = onKeyNumber,
+                    consumeMappedKeys = true,
                 )
                 .handleLeanbackDragGestures(
                     onSwipeDown = onKeyDown,
@@ -514,7 +514,7 @@ fun LeanbackMainContent(
                 }
             },
             onExitReplay = remember { { mainContentState.exitReplayMode() } },
-            segmentInfoProvider = remember {
+            segmentInfoProvider = remember(epgProvider) {
                 {
                     val programme = mainContentState.replayProgramme
                     val programmes = epgProvider()?.programmes ?: emptyList()
@@ -569,6 +569,10 @@ fun LeanbackMainContent(
                     isReplayModeProvider = isReplayModeProvider,
                     replayProgrammeProvider = replayProgrammeProvider,
                     showProgrammeProgressProvider = showProgrammeProgressProvider,
+                    isSwitchingChannelProvider = {
+                        !mainContentState.isReplayMode && !videoPlayerState.hasStartedPlayback &&
+                            videoPlayerState.error == null
+                    },
                 )
             }
 

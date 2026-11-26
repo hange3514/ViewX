@@ -96,11 +96,11 @@ fun LeanbackSettingsCategoryIptv(
         item {
             LeanbackSettingsCategoryListItem(
                 headlineContent = "换台预缓冲",
-                supportingContent = "提前缓冲预测频道和光标停留的频道，换台更快（性能弱的设备可关闭）",
+                supportingContent = "当前频道缓冲充足时预读候选频道，可能增加流量",
                 trailingContent = {
                     Switch(
                         checked = settingsViewModel.iptvPrebufferEnable,
-                        onCheckedChange = null
+                        onCheckedChange = null,
                     )
                 },
                 onSelected = {
@@ -171,9 +171,7 @@ fun LeanbackSettingsCategoryIptv(
                     showDialog = false
                     if (settingsViewModel.iptvSourceUrl != it) {
                         settingsViewModel.iptvSourceUrl = it
-                        coroutineScope.launch { IptvRepository().clearCache() }
-                        // 与网页推送路径对齐：软重启使新源生效
-                        LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                        LiveSettingsBus.requestIptvReload()
                         LeanbackToastState.I.showToast("直播源已切换，正在刷新...")
                     }
                 },
@@ -212,14 +210,15 @@ fun LeanbackSettingsCategoryIptv(
                 showDialogProvider = { showConfirm },
                 onDismissRequest = { showConfirm = false },
                 title = "清除缓存",
-                text = "将清除直播源缓存、节目单缓存和可播放域名记忆，下次启动重新拉取。确定继续吗？",
+                text = "将清除直播源、节目单缓存和线路记忆并重新加载，播放会短暂中断。",
                 onConfirm = {
                     settingsViewModel.iptvPlayableHostList = emptySet()
                     coroutineScope.launch {
                         IptvRepository().clearCache()
                         top.yogiczy.mytv.data.repositories.epg.EpgRepository().clearAllCache()
+                        LeanbackToastState.I.showToast("缓存已清除，正在刷新直播源")
+                        LiveSettingsBus.requestIptvReload(forceRefresh = true)
                     }
-                    LeanbackToastState.I.showToast("清除缓存成功")
                 },
             )
         }
@@ -384,7 +383,7 @@ private fun LeanbackSettingsIptvGroupVisibleDialog(
         onDismissRequest = {
             if (changed) {
                 LeanbackToastState.I.showToast("分组显示已更新，正在刷新...")
-                LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
+                LiveSettingsBus.requestIptvReload()
             }
             onDismissRequest()
         },

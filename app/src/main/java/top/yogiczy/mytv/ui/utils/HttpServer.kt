@@ -17,10 +17,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import top.yogiczy.mytv.AppGlobal
 import top.yogiczy.mytv.R
-import top.yogiczy.mytv.data.repositories.epg.EpgRepository
-import top.yogiczy.mytv.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.data.utils.Constants
 import top.yogiczy.mytv.utils.ApkInstaller
 import top.yogiczy.mytv.utils.Loggable
@@ -38,6 +37,7 @@ object HttpServer : Loggable() {
     }
 
     private var appContext: Context? = null
+    @Volatile
     private var showToast: (String) -> Unit = { }
 
     val serverUrl: String
@@ -49,10 +49,11 @@ object HttpServer : Loggable() {
     @Synchronized
     fun start(context: Context, showToast: (String) -> Unit) {
         appContext = context.applicationContext
-        // 幂等：Activity 重建（如推送直播源后的软重启）会重复调用，
+        // 幂等：切换界面模式导致 Activity 重建时会重复调用，
         // 重复 listen 同一端口会误报"设置服务启动失败"
         this.showToast = showToast
         if (started) return
+        started = true
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -84,11 +85,9 @@ object HttpServer : Loggable() {
                         .onFailure { response.code(500); response.send("error") }
                 }
 
-                // 成功 listen 后才置位，失败允许下次重试
-                started = true
-                HttpServer.showToast = showToast
                 log.i("服务已启动: 0.0.0.0:${SERVER_PORT}")
             } catch (ex: Exception) {
+                started = false
                 log.e("服务启动失败: ${ex.message}", ex)
                 launch(Dispatchers.Main) {
                     Toast.makeText(context, "设置服务启动失败", Toast.LENGTH_SHORT).show()
@@ -150,25 +149,25 @@ object HttpServer : Loggable() {
             return
         }
         // 字段可能缺失（第三方调用/旧版页面），缺省保持当前值，避免 JSONException
-        val iptvSourceUrl = body.optString("iptvSourceUrl", SP.iptvSourceUrl)
-        val epgXmlUrl = body.optString("epgXmlUrl", SP.epgXmlUrl)
+        val previousSourceUrl = SP.iptvSourceUrl
+        val previousEpgUrl = SP.epgXmlUrl
+        val iptvSourceUrl = body.optString("iptvSourceUrl", previousSourceUrl).trim()
+        val epgXmlUrl = body.optString("epgXmlUrl", previousEpgUrl).trim()
+        if (listOf(iptvSourceUrl, epgXmlUrl).any { it.isNotEmpty() && it.toHttpUrlOrNull() == null }) {
+            response.code(400)
+            response.send("直播源和节目单须使用 HTTP 或 HTTPS 地址")
+            return
+        }
         val videoPlayerUserAgent = body.optString("videoPlayerUserAgent", SP.videoPlayerUserAgent)
+        SP.saveRemoteSettings(iptvSourceUrl, epgXmlUrl, videoPlayerUserAgent)
 
-        if (SP.iptvSourceUrl != iptvSourceUrl) {
-            SP.iptvSourceUrl = iptvSourceUrl
-            IptvRepository().clearCache()
+        if (SP.iptvSourceUrl != previousSourceUrl) {
             showToast("直播源已更新，正在刷新...")
-            LiveSettingsBus.recreateAppRequests.tryEmit(Unit)
-        }
-
-        if (SP.epgXmlUrl != epgXmlUrl) {
-            SP.epgXmlUrl = epgXmlUrl
-            EpgRepository().clearAllCache()
+            LiveSettingsBus.requestIptvReload()
+        } else if (SP.epgXmlUrl != previousEpgUrl) {
             showToast("节目单地址已更新，正在刷新...")
-            LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
+            LiveSettingsBus.requestEpgRefresh()
         }
-
-        SP.videoPlayerUserAgent = videoPlayerUserAgent
 
         wrapResponse(response).send("success")
     }

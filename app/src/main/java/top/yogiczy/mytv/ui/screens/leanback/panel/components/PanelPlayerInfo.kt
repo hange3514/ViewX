@@ -1,6 +1,8 @@
 package top.yogiczy.mytv.ui.screens.leanback.panel.components
 
 import android.net.TrafficStats
+import android.os.Process
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,9 +19,14 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import java.text.DecimalFormat
@@ -63,9 +70,13 @@ private fun PanelPlayerInfoNetSpeed(
     modifier: Modifier = Modifier,
     netSpeed: Long = rememberNetSpeed(),
 ) {
+    val speedFormat = remember { DecimalFormat("0.#") }
     Text(
-        text = if (netSpeed < 1024 * 999) "网速：${netSpeed / 1024}KB/s"
-        else "网速：${DecimalFormat("#.").format(netSpeed / 1024 / 1024f)}MB/s",
+        text = when {
+            netSpeed < 0 -> "接收：—"
+            netSpeed < 1024 * 1024 -> "接收：${netSpeed / 1024} KB/s"
+            else -> "接收：${speedFormat.format(netSpeed / 1024 / 1024f)} MB/s"
+        },
         modifier = modifier,
     )
 }
@@ -73,20 +84,31 @@ private fun PanelPlayerInfoNetSpeed(
 @Composable
 private fun rememberNetSpeed(): Long {
     var netSpeed by remember { mutableLongStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(Unit) {
-        var lastTotalRxBytes = TrafficStats.getTotalRxBytes()
-        var lastTimeStamp = System.currentTimeMillis()
+    LaunchedEffect(lifecycleOwner) {
+        val uid = Process.myUid()
+        suspend fun readSample() = withContext(Dispatchers.IO) {
+            // 读取 UID 流量可能同步调用系统服务，避免阻塞遥控器的焦点事件。
+            val bytes = runCatching { TrafficStats.getUidRxBytes(uid) }.getOrDefault(-1L)
+            bytes to SystemClock.elapsedRealtime()
+        }
 
-        while (true) {
-            delay(1000)
-            val nowTotalRxBytes = TrafficStats.getTotalRxBytes()
-            val nowTimeStamp = System.currentTimeMillis()
-            val speed = (nowTotalRxBytes - lastTotalRxBytes) / (nowTimeStamp - lastTimeStamp) * 1000
-            lastTimeStamp = nowTimeStamp
-            lastTotalRxBytes = nowTotalRxBytes
-
-            netSpeed = speed
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var (lastRxBytes, lastTimeStamp) = readSample()
+            while (true) {
+                delay(1000)
+                val (nowRxBytes, nowTimeStamp) = readSample()
+                val elapsed = nowTimeStamp - lastTimeStamp
+                netSpeed = when {
+                    nowRxBytes < 0 -> -1L
+                    elapsed > 0 && lastRxBytes >= 0 && nowRxBytes >= lastRxBytes ->
+                        (nowRxBytes - lastRxBytes) * 1_000 / elapsed
+                    else -> 0L
+                }
+                lastTimeStamp = nowTimeStamp
+                lastRxBytes = nowRxBytes
+            }
         }
     }
 

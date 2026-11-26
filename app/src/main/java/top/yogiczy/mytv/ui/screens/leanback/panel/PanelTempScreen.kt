@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,6 +22,7 @@ import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
@@ -38,8 +44,19 @@ fun LeanbackPanelTempScreen(
     isReplayModeProvider: () -> Boolean = { false },
     replayProgrammeProvider: () -> EpgProgramme? = { null },
     showProgrammeProgressProvider: () -> Boolean = { false },
+    isSwitchingChannelProvider: () -> Boolean = { false },
 ) {
     val childPadding = rememberLeanbackChildPadding()
+    val isSwitchingChannel = isSwitchingChannelProvider()
+    var showSwitching by remember { mutableStateOf(false) }
+    LaunchedEffect(isSwitchingChannel) {
+        if (isSwitchingChannel) {
+            delay(240)
+            showSwitching = true
+        } else {
+            showSwitching = false
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         LeanbackPanelChannelNo(
@@ -61,13 +78,16 @@ fun LeanbackPanelTempScreen(
                     epgProvider = epgProvider,
                     isReplayModeProvider = isReplayModeProvider,
                     replayProgrammeProvider = replayProgrammeProvider,
+                    isSwitchingChannel = isSwitchingChannel && showSwitching,
                 )
 
                 val currentProgramme = rememberCurrentProgramme(
                     epgProvider()?.programmes ?: emptyList()
                 )
                 val isReplayMode = isReplayModeProvider()
-                if (showProgrammeProgressProvider() && !isReplayMode && currentProgramme != null) {
+                if (showProgrammeProgressProvider() && !isReplayMode &&
+                    currentProgramme != null && !isSwitchingChannel
+                ) {
                     ProgrammeProgressIndicator(
                         programme = currentProgramme,
                         modifier = Modifier
@@ -79,7 +99,9 @@ fun LeanbackPanelTempScreen(
             },
             modifier = Modifier
                 .padding(
-                    start = childPadding.start, bottom = childPadding.bottom
+                    start = childPadding.start,
+                    end = childPadding.end,
+                    bottom = childPadding.bottom,
                 )
                 .align(Alignment.BottomStart)
                 .background(

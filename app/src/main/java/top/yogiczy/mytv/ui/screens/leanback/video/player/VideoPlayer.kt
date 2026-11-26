@@ -1,7 +1,6 @@
 package top.yogiczy.mytv.ui.screens.leanback.video.player
 
 import android.view.SurfaceView
-import androidx.media3.common.PlaybackException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,7 +13,6 @@ abstract class LeanbackVideoPlayer(
 ) : Loggable() {
     private var loadTimeoutJob: Job? = null
     private var cutoffTimeoutJob: Job? = null
-    private var currentPosition = -1L
     private var positionCheckpoint = -1L
 
     protected var metadata = Metadata()
@@ -24,21 +22,27 @@ abstract class LeanbackVideoPlayer(
     }
 
     open fun release() {
-        loadTimeoutJob?.cancel()
-        loadTimeoutJob = null
-        cutoffTimeoutJob?.cancel()
-        cutoffTimeoutJob = null
+        cancelLoadTimeout()
+        resetCutoff()
         clearAllListeners()
     }
 
     abstract fun prepare(url: String)
 
+    open fun preloadLive(url: String) {}
+
+    open fun cancelLivePreload() {}
+
+    open fun prepareLive(url: String, allowPreload: Boolean): Boolean {
+        prepare(url)
+        return false
+    }
+
     abstract fun play()
 
     abstract fun pause()
 
-    /** 音量（0.0~1.0），待机播放器用于静音预缓冲 */
-    open fun setVolume(volume: Float) {}
+    open fun stop() = pause()
 
     abstract fun setVideoSurfaceView(surfaceView: SurfaceView)
 
@@ -47,6 +51,10 @@ abstract class LeanbackVideoPlayer(
     abstract fun seekTo(positionMs: Long)
 
     abstract val currentPositionMs: Long
+    open val bufferedDurationMs: Long get() = 0L
+    open val isPlaying: Boolean get() = false
+    open val hasLivePreload: Boolean get() = false
+    open val hasVideoTrack: Boolean get() = true
 
     private val onResolutionListeners = mutableListOf<(width: Int, height: Int) -> Unit>()
     private val onErrorListeners = mutableListOf<(error: PlaybackException?) -> Unit>()
@@ -55,7 +63,8 @@ abstract class LeanbackVideoPlayer(
     private val onPreparedListeners = mutableListOf<() -> Unit>()
     private val onMetadataListeners = mutableListOf<(metadata: Metadata) -> Unit>()
     private val onCutoffListeners = mutableListOf<() -> Unit>()
-    private val onCurrentPositionListeners = mutableListOf<(positionMs: Long) -> Unit>()
+    private val onEndedListeners = mutableListOf<() -> Unit>()
+    private val onFirstFrameListeners = mutableListOf<(renderTimeMs: Long) -> Unit>()
 
     private fun clearAllListeners() {
         onResolutionListeners.clear()
@@ -65,7 +74,8 @@ abstract class LeanbackVideoPlayer(
         onPreparedListeners.clear()
         onMetadataListeners.clear()
         onCutoffListeners.clear()
-        onCurrentPositionListeners.clear()
+        onEndedListeners.clear()
+        onFirstFrameListeners.clear()
     }
 
     protected fun triggerResolution(width: Int, height: Int) {
@@ -73,34 +83,43 @@ abstract class LeanbackVideoPlayer(
     }
 
     protected fun triggerError(error: PlaybackException?) {
-        onErrorListeners.forEach { it(error) }
-        // 只有真正的错误才取消加载超时；
-        // BUFFERING 时的 triggerError(null) 只是清错误状态，不能取消，
-        // 否则超时任务在启动后就被立即取消，LOAD_TIMEOUT 永远不触发
-        if (error != null && error != PlaybackException.LOAD_TIMEOUT) {
-            loadTimeoutJob?.cancel()
-            loadTimeoutJob = null
+        // 错误回调可同步开始下一次 prepare，先清理本次任务。
+        // BUFFERING 的 null 事件只清理界面错误，加载超时仍须保留。
+        if (error != null) {
+            cancelLoadTimeout()
+            resetCutoff()
         }
+        onErrorListeners.forEach { it(error) }
     }
 
     protected fun triggerReady() {
+        cancelLoadTimeout()
         onReadyListeners.forEach { it() }
-        loadTimeoutJob?.cancel()
     }
 
     protected fun triggerBuffering(buffering: Boolean) {
         onBufferingListeners.forEach { it(buffering) }
     }
 
-    protected fun triggerPrepared() {
+    protected fun triggerPrepared(loadTimeoutMillis: Long = SP.videoPlayerLoadTimeout) {
+        cancelLoadTimeout()
+        resetCutoff()
+        startLoadTimeout(loadTimeoutMillis)
         notifyPrepared()
-        loadTimeoutJob?.cancel()
+    }
+
+    protected fun startLoadTimeout(loadTimeoutMillis: Long = SP.videoPlayerLoadTimeout) {
+        if (loadTimeoutJob?.isActive == true) return
         loadTimeoutJob = coroutineScope.launch {
-            delay(SP.videoPlayerLoadTimeout)
+            delay(loadTimeoutMillis)
+            loadTimeoutJob = null
             triggerError(PlaybackException.LOAD_TIMEOUT)
         }
-        cutoffTimeoutJob?.cancel()
-        cutoffTimeoutJob = null
+    }
+
+    protected fun cancelLoadTimeout() {
+        loadTimeoutJob?.cancel()
+        loadTimeoutJob = null
     }
 
     /**
@@ -122,8 +141,6 @@ abstract class LeanbackVideoPlayer(
             positionCheckpoint = newPosition
             resetCutoffTimeoutJob()
         }
-        currentPosition = newPosition
-        onCurrentPositionListeners.forEach { it(newPosition) }
     }
 
     protected fun resetCutoff() {
@@ -136,14 +153,25 @@ abstract class LeanbackVideoPlayer(
         cutoffTimeoutJob?.cancel()
         cutoffTimeoutJob = coroutineScope.launch {
             delay(SP.videoPlayerLoadTimeout)
-            onCutoffListeners.forEach { it() }
+            cutoffTimeoutJob = null
+            triggerCutoff()
         }
     }
 
     protected fun triggerCutoff() {
-        onCutoffListeners.forEach { it() }
         cutoffTimeoutJob?.cancel()
         cutoffTimeoutJob = null
+        onCutoffListeners.forEach { it() }
+    }
+
+    protected fun triggerEnded() {
+        cancelLoadTimeout()
+        resetCutoff()
+        onEndedListeners.forEach { it() }
+    }
+
+    protected fun triggerFirstFrame(renderTimeMs: Long) {
+        onFirstFrameListeners.forEach { it(renderTimeMs) }
     }
 
     fun onResolution(listener: (width: Int, height: Int) -> Unit) {
@@ -174,8 +202,12 @@ abstract class LeanbackVideoPlayer(
         onCutoffListeners.add(listener)
     }
 
-    fun onCurrentPosition(listener: (positionMs: Long) -> Unit) {
-        onCurrentPositionListeners.add(listener)
+    fun onEnded(listener: () -> Unit) {
+        onEndedListeners.add(listener)
+    }
+
+    fun onFirstFrame(listener: (renderTimeMs: Long) -> Unit) {
+        onFirstFrameListeners.add(listener)
     }
 
     data class PlaybackException(

@@ -1,5 +1,8 @@
 package top.yogiczy.mytv.ui.screens.leanback.panel.components
 
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -11,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,11 +25,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyListState
-import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
@@ -41,7 +44,6 @@ import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.screens.leanback.components.LeanbackEmptyListItem
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
@@ -66,17 +68,32 @@ fun LeanbackPanelIptvEpgDialog(
         AlertDialog(
             modifier = modifier,
             onDismissRequest = onDismissRequest,
-            confirmButton = { Text(text = "左右切换频道") },
-            title = { Text(iptv.channelName) },
+            confirmButton = {
+                androidx.tv.material3.Button(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.tvTouchClickable(onClick = onDismissRequest),
+                ) {
+                    androidx.tv.material3.Text("关闭")
+                }
+            },
+            title = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(iptv.channelName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        text = "左右切换频道",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
             text = {
                 val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
                 var hasFocused by remember(iptv) { mutableStateOf(false) }
 
-                val listState = remember(epg.programmes) {
-                    TvLazyListState(
-                        max(0, epg.programmes.indexOfCurrent(System.currentTimeMillis()) - 2)
-                    )
+                val entryIndex = remember(epg.programmes) {
+                    max(0, epg.programmes.indexOfCurrent(System.currentTimeMillis()))
                 }
+                val listState = remember(epg.programmes) { TvLazyListState(max(0, entryIndex - 1)) }
 
                 LaunchedEffect(listState) {
                     snapshotFlow { listState.isScrollInProgress }
@@ -89,7 +106,7 @@ fun LeanbackPanelIptvEpgDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
                     if (epg.programmes.isNotEmpty()) {
-                        items(epg.programmes, key = { it.startAt }) { programme ->
+                        itemsIndexed(epg.programmes, key = { index, programme -> "$index:${programme.startAt}" }) { index, programme ->
                             var isFocused by remember { mutableStateOf(false) }
                             val focusRequester = remember { FocusRequester() }
                             val isLive = rememberProgrammeIsLive(programme)
@@ -98,8 +115,8 @@ fun LeanbackPanelIptvEpgDialog(
                                 iptv.catchupSource.isNotBlank(),
                             )
 
-                            LaunchedEffect(Unit) {
-                                if (isLive && !hasFocused) {
+                            LaunchedEffect(iptv, entryIndex) {
+                                if (index == entryIndex && !hasFocused) {
                                     hasFocused = true
                                     focusRequester.requestFocus()
                                 }
@@ -144,7 +161,8 @@ fun LeanbackPanelIptvEpgDialog(
                                     headlineContent = {
                                         Text(
                                             text = programme.title,
-                                            maxLines = if (isFocused) Int.MAX_VALUE else 1,
+                                            maxLines = if (isFocused) 3 else 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     },
                                     overlineContent = {
@@ -174,8 +192,12 @@ fun LeanbackPanelIptvEpgDialog(
                         }
                     } else {
                         item {
-                            // 统一空态组件：不可聚焦、无选中态
-                            LeanbackEmptyListItem(text = "当前频道暂无节目")
+                            val focusRequester = remember { FocusRequester() }
+                            LaunchedEffect(iptv) { focusRequester.requestFocus() }
+                            LeanbackEmptyListItem(
+                                text = "当前频道暂无节目",
+                                modifier = Modifier.focusRequester(focusRequester).focusable(),
+                            )
                         }
                     }
                 }

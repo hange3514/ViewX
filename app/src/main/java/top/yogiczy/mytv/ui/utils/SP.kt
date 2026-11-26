@@ -196,7 +196,7 @@ object SP {
         get() = sp.getBoolean(KEY.IPTV_CHANNEL_CHANGE_FLIP.name, false)
         set(value) = sp.edit().putBoolean(KEY.IPTV_CHANNEL_CHANGE_FLIP.name, value).apply()
 
-    /** 换台预缓冲（待机播放器提前缓冲预测频道） */
+    /** 换台预缓冲 */
     var iptvPrebufferEnable: Boolean
         get() = sp.getBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, true)
         set(value) = sp.edit().putBoolean(KEY.IPTV_PREBUFFER_ENABLE.name, value).apply()
@@ -329,6 +329,14 @@ object SP {
             Constants.VIDEO_PLAYER_USER_AGENT
         }
         set(value) = sp.edit().putString(KEY.VIDEO_PLAYER_USER_AGENT.name, value).apply()
+
+    internal fun saveRemoteSettings(sourceUrl: String, epgUrl: String, userAgent: String) {
+        sp.edit()
+            .putString(KEY.IPTV_SOURCE_URL.name, sourceUrl)
+            .putString(KEY.EPG_XML_URL.name, epgUrl)
+            .putString(KEY.VIDEO_PLAYER_USER_AGENT.name, userAgent)
+            .apply()
+    }
 
     /** 播放器 加载超时 */
     var videoPlayerLoadTimeout: Long

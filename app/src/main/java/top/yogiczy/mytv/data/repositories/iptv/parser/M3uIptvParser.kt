@@ -8,45 +8,52 @@ import top.yogiczy.mytv.data.entities.IptvList
 class M3uIptvParser : IptvParser {
 
     override fun isSupport(url: String, data: String): Boolean {
-        return data.startsWith("#EXTM3U")
+        return data.m3uHeader() != null
     }
 
     override suspend fun parse(data: String): IptvGroupList {
-        val lines = data.split("\r\n", "\n")
         val iptvList = mutableListOf<IptvResponseItem>()
 
         // #EXTM3U 全局头可声明默认回放方式（如 catchup="append" catchup-source="?playbackbegin=..."），
         // 频道行未声明时继承；频道行声明了则以频道行为准
         var globalCatchup = ""
         var globalCatchupSource = ""
-        lines.firstOrNull { it.startsWith("#EXTM3U") }?.let { header ->
+        data.m3uHeader()?.let { header ->
             globalCatchup = CATCHUP_REGEX.find(header)?.groupValues?.get(1) ?: ""
             globalCatchupSource = CATCHUP_SOURCE_REGEX.find(header)?.groupValues?.get(1) ?: ""
         }
 
-        lines.forEachIndexed { index, line ->
-            if (!line.startsWith("#EXTINF")) return@forEachIndexed
+        var pendingEntry: String? = null
+        data.lineSequence().forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.startsWith("#EXTINF:", ignoreCase = true)) {
+                pendingEntry = line
+                return@forEach
+            }
+            // 播放地址前可带 #EXTVLCOPT、#KODIPROP 等指令或空行。
+            if (line.isBlank() || line.startsWith('#')) return@forEach
+            val entry = pendingEntry ?: return@forEach
+            pendingEntry = null
 
-            // 播放地址在下一行；源文件被截断或下一行仍是指令时跳过该条目，防越界/误把注释当 URL
-            val url = lines.getOrNull(index + 1)?.trim()
-                ?.takeIf { it.isNotBlank() && !it.startsWith("#") }
-                ?: return@forEachIndexed
-
-            val name = line.split(",").last()
-            val channelName = TVG_NAME_REGEX.find(line)?.groupValues?.get(1) ?: name
-            val tvgId = TVG_ID_REGEX.find(line)?.groupValues?.get(1) ?: ""
-            val groupName = GROUP_TITLE_REGEX.find(line)?.groupValues?.get(1) ?: "其他"
-            val catchup = CATCHUP_REGEX.find(line)?.groupValues?.get(1) ?: ""
-            val catchupSource = CATCHUP_SOURCE_REGEX.find(line)?.groupValues?.get(1) ?: ""
-            val catchupDays = CATCHUP_DAYS_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val comma = metadataEnd(entry)
+            if (comma < 0) return@forEach
+            val attributes = entry.substring(0, comma)
+            val tvgName = TVG_NAME_REGEX.find(attributes)?.groupValues?.get(1)?.trim()
+            val name = entry.substring(comma + 1).trim().ifBlank { tvgName.orEmpty() }
+            if (name.isEmpty()) return@forEach
+            val tvgId = TVG_ID_REGEX.find(attributes)?.groupValues?.get(1) ?: ""
+            val groupName = GROUP_TITLE_REGEX.find(attributes)?.groupValues?.get(1) ?: "其他"
+            val catchup = CATCHUP_REGEX.find(attributes)?.groupValues?.get(1) ?: ""
+            val catchupSource = CATCHUP_SOURCE_REGEX.find(attributes)?.groupValues?.get(1) ?: ""
+            val catchupDays = CATCHUP_DAYS_REGEX.find(attributes)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
             iptvList.add(
                 IptvResponseItem(
-                    name = name.trim(),
-                    channelName = channelName.trim(),
+                    name = name,
+                    channelName = tvgName?.ifEmpty { name } ?: name,
                     tvgId = tvgId.trim(),
                     groupName = groupName.trim(),
-                    url = url,
+                    url = line,
                     catchup = catchup.trim().ifBlank { globalCatchup.trim() },
                     catchupSource = catchupSource.trim().ifBlank { globalCatchupSource.trim() },
                     catchupDays = catchupDays,
@@ -61,7 +68,7 @@ class M3uIptvParser : IptvParser {
                     Iptv(
                         name = nameEntry.key,
                         channelName = nameEntry.value.first().channelName,
-                        urlList = nameEntry.value.map { it.url },
+                        urlList = nameEntry.value.map { it.url }.distinct(),
                         catchup = nameEntry.value.first().catchup,
                         catchupSource = nameEntry.value.first().catchupSource,
                         catchupDays = nameEntry.value.first().catchupDays,
@@ -70,6 +77,20 @@ class M3uIptvParser : IptvParser {
                 })
             )
         })
+    }
+
+    private fun metadataEnd(line: String): Int {
+        var quoted = false
+        var escaped = false
+        for ((index, character) in line.withIndex()) {
+            when {
+                escaped -> escaped = false
+                quoted && character == '\\' -> escaped = true
+                character == '"' -> quoted = !quoted
+                character == ',' && !quoted -> return index
+            }
+        }
+        return -1
     }
 
     private data class IptvResponseItem(
@@ -85,11 +106,20 @@ class M3uIptvParser : IptvParser {
 
     private companion object {
         // 正则提前编译，避免逐行构造
-        val TVG_NAME_REGEX = Regex("tvg-name=\"(.+?)\"")
-        val TVG_ID_REGEX = Regex("tvg-id=\"(.+?)\"")
-        val GROUP_TITLE_REGEX = Regex("group-title=\"(.+?)\"")
-        val CATCHUP_REGEX = Regex("catchup=\"(.+?)\"")
-        val CATCHUP_SOURCE_REGEX = Regex("catchup-source=\"(.+?)\"")
-        val CATCHUP_DAYS_REGEX = Regex("catchup-days=\"(.+?)\"")
+        val TVG_NAME_REGEX = m3uAttribute("tvg-name")
+        val TVG_ID_REGEX = m3uAttribute("tvg-id")
+        val GROUP_TITLE_REGEX = m3uAttribute("group-title")
+        val CATCHUP_REGEX = m3uAttribute("catchup")
+        val CATCHUP_SOURCE_REGEX = m3uAttribute("catchup-source")
+        val CATCHUP_DAYS_REGEX = m3uAttribute("catchup-days")
     }
 }
+
+internal fun String.m3uHeader(): String? =
+    trimStart { it.isWhitespace() || it == '\uFEFF' }
+        .lineSequence()
+        .firstOrNull()
+        ?.takeIf { it.startsWith("#EXTM3U", ignoreCase = true) }
+
+internal fun m3uAttribute(name: String): Regex =
+    Regex("(?:^|\\s)$name\\s*=\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE)

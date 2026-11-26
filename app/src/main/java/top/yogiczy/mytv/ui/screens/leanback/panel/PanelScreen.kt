@@ -22,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
@@ -75,14 +77,19 @@ fun LeanbackPanelScreen(
         onTimeout = onClose,
     ),
 ) {
-    LaunchedEffect(Unit) {
-        autoCloseState.active()
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused) {
+        autoCloseState.setPaused(!windowFocused)
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background.copy(alpha = LeanbackAlpha.Scrim))
+            .onPreviewKeyEvent {
+                autoCloseState.active()
+                false
+            }
             .pointerInput(Unit) { detectTapGestures(onTap = { onClose() }) },
     ) {
         val channelNoProvider = remember {

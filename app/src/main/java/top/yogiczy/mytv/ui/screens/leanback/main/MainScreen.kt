@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,7 +55,7 @@ fun LeanbackMainScreen(
 ) {
     val uiState by mainViewModel.uiState.collectAsState()
 
-    // 网页端推送新的直播源地址后，重建界面使新源实时生效（软重启，无需手动退出应用）
+    // 显示模式变更时重新应用 Activity 的界面配置。
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         LiveSettingsBus.recreateAppRequests.collect {
@@ -63,12 +64,14 @@ fun LeanbackMainScreen(
     }
 
     when (val s = uiState) {
-        is LeanbackMainUiState.Ready -> LeanbackMainContent(
-            modifier = modifier,
-            iptvGroupList = s.iptvGroupList,
-            epgList = s.epgList,
-            onBackPressed = onBackPressed,
-        )
+        is LeanbackMainUiState.Ready -> key(s.playlistRevision) {
+            LeanbackMainContent(
+                modifier = modifier,
+                iptvGroupList = s.iptvGroupList,
+                epgList = s.epgList,
+                onBackPressed = onBackPressed,
+            )
+        }
 
         is LeanbackMainUiState.Loading -> LeanbackMainSettingsHandle(onBackPressed = onBackPressed) {
             LeanbackMainScreenLoading { s.message }

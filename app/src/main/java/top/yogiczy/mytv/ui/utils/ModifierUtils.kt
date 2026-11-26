@@ -129,38 +129,17 @@ fun Modifier.handleLeanbackKeyEvents(
     onLongSelect: () -> Unit = {},
     onSettings: () -> Unit = {},
     onNumber: (Int) -> Unit = {},
+    consumeMappedKeys: Boolean = false,
 ): Modifier = composed {
     val keyDownMap = remember { mutableMapOf<Int, Boolean>() }
-
-    fun handleTap(keyCode: Int) {
-        when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT -> onLeft()
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT -> onRight()
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP -> onUp()
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> onDown()
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> onSelect()
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS, KeyEvent.KEYCODE_HELP, KeyEvent.KEYCODE_H -> onSettings()
-            KeyEvent.KEYCODE_L -> onLongSelect()
-            KeyEvent.KEYCODE_0 -> onNumber(0)
-            KeyEvent.KEYCODE_1 -> onNumber(1)
-            KeyEvent.KEYCODE_2 -> onNumber(2)
-            KeyEvent.KEYCODE_3 -> onNumber(3)
-            KeyEvent.KEYCODE_4 -> onNumber(4)
-            KeyEvent.KEYCODE_5 -> onNumber(5)
-            KeyEvent.KEYCODE_6 -> onNumber(6)
-            KeyEvent.KEYCODE_7 -> onNumber(7)
-            KeyEvent.KEYCODE_8 -> onNumber(8)
-            KeyEvent.KEYCODE_9 -> onNumber(9)
-        }
-    }
 
     fun handleLongTap(keyCode: Int) {
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> onLongLeft()
             KeyEvent.KEYCODE_DPAD_RIGHT -> onLongRight()
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> onLongUp()
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> onLongDown()
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> onLongSelect()
+            KeyEvent.KEYCODE_DPAD_UP -> onLongUp()
+            KeyEvent.KEYCODE_DPAD_DOWN -> onLongDown()
+            KeyEvent.KEYCODE_DPAD_CENTER -> onLongSelect()
         }
     }
 
@@ -184,27 +163,47 @@ fun Modifier.handleLeanbackKeyEvents(
 
     onPreviewKeyEvent {
         val nativeEvent = it.nativeKeyEvent
-        val keyCode = nativeEvent.keyCode
+        val physicalKey = nativeEvent.keyCode
+        val keyCode = when (physicalKey) {
+            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT
+            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP -> KeyEvent.KEYCODE_DPAD_UP
+            KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> KeyEvent.KEYCODE_DPAD_DOWN
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> KeyEvent.KEYCODE_DPAD_CENTER
+            KeyEvent.KEYCODE_SETTINGS, KeyEvent.KEYCODE_HELP, KeyEvent.KEYCODE_H -> KeyEvent.KEYCODE_MENU
+            else -> physicalKey
+        }
+        val tap = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> onLeft
+            KeyEvent.KEYCODE_DPAD_RIGHT -> onRight
+            KeyEvent.KEYCODE_DPAD_UP -> onUp
+            KeyEvent.KEYCODE_DPAD_DOWN -> onDown
+            KeyEvent.KEYCODE_DPAD_CENTER -> onSelect
+            KeyEvent.KEYCODE_MENU -> onSettings
+            KeyEvent.KEYCODE_L -> onLongSelect
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> ({ onNumber(keyCode - KeyEvent.KEYCODE_0) })
+            else -> return@onPreviewKeyEvent false
+        }
+
         when (nativeEvent.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (nativeEvent.repeatCount == 0) {
-                    keyDownMap[keyCode] = true
+                    keyDownMap[physicalKey] = true
                     handlePressStart(keyCode)
-                } else if (nativeEvent.repeatCount == 1) {
-                    keyDownMap[keyCode] = false
+                } else if (keyDownMap[physicalKey] == true) {
+                    keyDownMap[physicalKey] = false
                     handleLongTap(keyCode)
                 }
             }
 
             KeyEvent.ACTION_UP -> {
-                val wasPressed = keyDownMap.containsKey(keyCode)
-                val wasShortPress = keyDownMap.remove(keyCode) == true
-                if (wasPressed) handlePressEnd(keyCode)
-                if (wasShortPress) handleTap(keyCode)
+                val wasShortPress = keyDownMap.remove(physicalKey)
+                if (wasShortPress != null) handlePressEnd(keyCode)
+                if (wasShortPress == true && !nativeEvent.isCanceled) tap()
             }
         }
 
-        false
+        consumeMappedKeys
     }
 }.pointerInput(key) {
     detectTapGestures(

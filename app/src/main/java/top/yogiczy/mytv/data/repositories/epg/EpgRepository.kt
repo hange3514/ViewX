@@ -1,47 +1,55 @@
 package top.yogiczy.mytv.data.repositories.epg
 
 import android.util.Xml
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import top.yogiczy.mytv.data.entities.Epg
 import top.yogiczy.mytv.data.entities.EpgList
 import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.repositories.FileCacheRepository
+import top.yogiczy.mytv.data.repositories.download
 import top.yogiczy.mytv.data.utils.ChannelNameNormalizer
 import top.yogiczy.mytv.utils.Logger
-import java.io.StringReader
+import java.io.IOException
+import java.io.InputStream
+import java.text.ParsePosition
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 
 /**
  * 节目单获取
  */
-class EpgRepository : FileCacheRepository("epg.json") {
+class EpgRepository : FileCacheRepository("epg-viewx-v2.json") {
     private val log = Logger.create(javaClass.simpleName)
-    private val epgXmlRepository = EpgXmlRepository()
 
     /**
      * 解析节目单xml
      */
-    private suspend fun parseFromXml(
-        xmlString: String,
+    private fun parseFromXml(
+        stream: InputStream,
         filteredChannels: List<String> = emptyList(),
         filteredChannelIds: List<String> = emptyList(),
-    ) = withContext(Dispatchers.Default) {
+    ): EpgList {
         val parser: XmlPullParser = Xml.newPullParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-        parser.setInput(StringReader(xmlString))
+        parser.setInput(stream, null)
+        require(parser.nextTag() == XmlPullParser.START_TAG && parser.name == "tv") {
+            "节目单不是有效的 XMLTV 文件"
+        }
 
         val epgMap = mutableMapOf<String, Epg>()
         val programmesMap = mutableMapOf<String, MutableList<EpgProgramme>>()
+        val seenChannels = mutableSetOf<String>()
 
         val filterNormalized = filteredChannels.map { ChannelNameNormalizer.normalize(it) }.toHashSet()
         val filterIdSet = filteredChannelIds.map { it.trim().lowercase() }.filter { it.isNotBlank() }.toHashSet()
@@ -50,10 +58,10 @@ class EpgRepository : FileCacheRepository("epg.json") {
         var includedChannelCount = 0
         var parseTimeFailureCount = 0
 
+        val colonOffset = Regex("([+-]\\d{2}):(\\d{2})$")
         val dateFormats = listOf(
             SimpleDateFormat("yyyyMMddHHmmss Z", Locale.ROOT),
             SimpleDateFormat("yyyyMMddHHmmssZ", Locale.ROOT),
-            SimpleDateFormat("yyyyMMddHHmmss XXX", Locale.ROOT),
             SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("GMT+8")
             },
@@ -61,12 +69,16 @@ class EpgRepository : FileCacheRepository("epg.json") {
         fun parseTime(time: String?): Long {
             val t = time?.trim() ?: return 0
             if (t.length < 14) return 0
+            // 旧版 Android 的 SimpleDateFormat 不支持 XXX。将 ISO 时区标准化后按 Z 解析。
+            val normalized = if (t.endsWith('Z')) {
+                t.dropLast(1) + "+0000"
+            } else {
+                colonOffset.replace(t, "$1$2")
+            }
             for (format in dateFormats) {
-                try {
-                    return format.parse(t)?.time ?: 0
-                } catch (_: Exception) {
-                    // try next format
-                }
+                val position = ParsePosition(0)
+                val date = format.parse(normalized, position)
+                if (date != null && position.index == normalized.length) return date.time
             }
             log.w("无法解析节目时间: $t")
             return 0
@@ -89,14 +101,18 @@ class EpgRepository : FileCacheRepository("epg.json") {
             }
         }
 
-        var eventType = parser.eventType
+        var rootClosed = false
+        var eventType = parser.next()
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
                 XmlPullParser.START_TAG -> {
-                    if (parser.name == "channel") {
+                    if (parser.depth != 2) {
+                        skipSubTree()
+                    } else if (parser.name == "channel") {
                         rawChannelCount++
                         val channelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
                         val normalizedChannelId = channelId.lowercase()
+                        seenChannels.add(normalizedChannelId)
                         var channelName = ""
 
                         var inner = parser.nextToken()
@@ -123,11 +139,17 @@ class EpgRepository : FileCacheRepository("epg.json") {
                         if (shouldInclude) {
                             includedChannelCount++
                             epgMap[normalizedChannelId] = Epg(channelName, EpgProgrammeList(), channelId)
-                            programmesMap[normalizedChannelId] = mutableListOf()
+                        } else {
+                            programmesMap.remove(normalizedChannelId)
                         }
                     } else if (parser.name == "programme") {
                         val channelId = parser.getAttributeValue(null, "channel")?.trim() ?: ""
                         val normalizedChannelId = channelId.lowercase()
+                        if (normalizedChannelId in seenChannels && normalizedChannelId !in epgMap) {
+                            skipSubTree()
+                            eventType = parser.next()
+                            continue
+                        }
                         val startTime = parser.getAttributeValue(null, "start")
                         val stopTime = parser.getAttributeValue(null, "stop")
                         var title = ""
@@ -146,22 +168,25 @@ class EpgRepository : FileCacheRepository("epg.json") {
 
                         val startAt = parseTime(startTime)
                         val endAt = parseTime(stopTime)
-                        if (startAt == 0L || endAt == 0L) parseTimeFailureCount++
-
-                        // xmltv 未规定 channel 必须先于 programme 出现，用 getOrPut 避免乱序时丢节目；
-                        // 未通过过滤的频道在最终结果中本就不会出现
-                        programmesMap.getOrPut(normalizedChannelId) { mutableListOf() }.add(
-                            EpgProgramme(
-                                startAt = startAt,
-                                endAt = endAt,
-                                title = title,
+                        if (startAt == 0L || endAt <= startAt) {
+                            parseTimeFailureCount++
+                        } else {
+                            // 源内乱序时先保存节目，等频道定义出现后再确定是否保留。
+                            programmesMap.getOrPut(normalizedChannelId) { mutableListOf() }.add(
+                                EpgProgramme(startAt = startAt, endAt = endAt, title = title)
                             )
-                        )
+                        }
+                    } else {
+                        skipSubTree()
                     }
+                }
+                XmlPullParser.END_TAG -> if (parser.depth == 1 && parser.name == "tv") {
+                    rootClosed = true
                 }
             }
             eventType = parser.next()
         }
+        require(rootClosed) { "节目单 XML 文件不完整" }
 
         val result = epgMap.map { (channelId, epg) ->
             val programmes = (programmesMap[channelId] ?: emptyList()).sortedBy { it.startAt }
@@ -169,93 +194,73 @@ class EpgRepository : FileCacheRepository("epg.json") {
         }
 
         val totalProgrammes = result.sumOf { it.programmes.size }
+        require(totalProgrammes > 0) { "节目单未包含当前频道的有效节目" }
         val nonEmptyChannels = result.count { it.programmes.isNotEmpty() }
         log.i(
             "解析节目单完成，原始频道=${rawChannelCount}，保留=${includedChannelCount}，" +
                     "有节目=${nonEmptyChannels}，总节目=${totalProgrammes}，时间解析失败=${parseTimeFailureCount}"
         )
 
-        return@withContext EpgList(result)
+        return EpgList(result)
     }
 
-    /**
-     * 清空全部节目单缓存：解析缓存（epg.json）+ 原始 xml 缓存（epg.xml）。
-     * 只清 epg.json 的话，断网时 EPG 会从陈旧 xml 兜底"复活"，与清除语义不符
-     */
-    fun clearAllCache() {
-        clearCache()
-        epgXmlRepository.clearCache()
-    }
+    suspend fun clearAllCache() = clearCache()
 
     suspend fun getEpgList(
-        xmlUrl: String,
+        xmlUrls: List<String>,
         filteredChannels: List<String> = emptyList(),
         filteredChannelIds: List<String> = emptyList(),
-        refreshTimeThreshold: Int,
+        refreshIntervalHours: Int,
+        forceRefresh: Boolean = false,
     ) = withContext(Dispatchers.Default) {
-        try {
-            // 不再按小时阈值跳过 EPG 刷新，避免设置项导致节目单为空
-            if (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < refreshTimeThreshold) {
-                log.i("EPG刷新时间阈值(${refreshTimeThreshold})大于当前小时，已忽略，继续刷新")
-            }
-
-            // 每次启动都重新解析 EPG，避免旧缓存导致节目单不更新
-            val xmlJson = getOrRefresh(0L) {
-                val xmlString = epgXmlRepository.getEpgXml(xmlUrl)
-                Json.encodeToString(parseFromXml(xmlString, filteredChannels, filteredChannelIds).value)
-            }
-
-            EpgList(Json.decodeFromString<List<Epg>>(xmlJson))
-        } catch (ex: Exception) {
-            log.e("获取节目单失败", ex)
-            throw Exception(ex)
+        val cacheTime = when {
+            forceRefresh -> 0L
+            refreshIntervalHours <= 0 -> TimeUnit.MINUTES.toMillis(30)
+            else -> TimeUnit.HOURS.toMillis(refreshIntervalHours.toLong())
         }
-    }
-}
-
-/**
- * 节目单xml获取
- */
-private class EpgXmlRepository : FileCacheRepository("epg.xml") {
-    private val log = Logger.create(javaClass.simpleName)
-
-    /**
-     * 获取远程xml
-     */
-    private suspend fun fetchXml(url: String): String = withContext(Dispatchers.IO) {
-        log.d("获取远程节目单xml: $url")
-
-        val client = OkHttpClient()
-        val request = Request.Builder().url(url).build()
-
-        try {
-            with(client.newCall(request).execute()) {
-                if (!isSuccessful) {
-                    throw Exception("获取远程节目单xml失败: $code")
-                }
-
-                // 按内容嗅探（而非 URL 后缀）识别 gzip/纯文本，
-                // 兼容 epg.xml?token=xx、epg.php 等地址
-                val bytes = body!!.bytes()
-                return@with when {
-                    bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte() ->
-                        java.util.zip.GZIPInputStream(bytes.inputStream())
-                            .bufferedReader(Charsets.UTF_8).readText()
-
-                    else -> String(bytes, Charsets.UTF_8)
-                }
-            }
-        } catch (ex: Exception) {
-            throw Exception("获取远程节目单xml失败，请检查网络连接", ex)
+        val cacheKey = Json.encodeToString(
+            listOf(xmlUrls, filteredChannels.distinct().sorted(), filteredChannelIds.distinct().sorted())
+        )
+        var parsedResult: Pair<String, CachedEpg>? = null
+        val json = getOrRefresh(cacheTime, cacheKey) {
+            val epg = fetchFromSources(xmlUrls, filteredChannels, filteredChannelIds)
+            Json.encodeToString(epg).also { parsedResult = it to epg }
         }
+        val snapshot = parsedResult?.takeIf { it.first === json }?.second ?: Json.decodeFromString<CachedEpg>(json)
+        EpgList(snapshot.programmes) to xmlUrls[snapshot.sourceIndex]
     }
 
-    /**
-     * 获取xml
-     */
-    suspend fun getEpgXml(url: String): String {
-        return getOrRefresh(0) {
-            fetchXml(url)
+    private suspend fun fetchFromSources(
+        urls: List<String>,
+        channels: List<String>,
+        channelIds: List<String>,
+    ): CachedEpg {
+        var failure: Exception? = null
+        for ((index, url) in urls.withIndex()) {
+            try {
+                val epg = httpClient.download(url) { body ->
+                    val source = body.source()
+                    val gzip = source.request(2) &&
+                        source.buffer[0] == 0x1F.toByte() && source.buffer[1] == 0x8B.toByte()
+                    val stream = source.inputStream()
+                    if (gzip) GZIPInputStream(stream).use { parseFromXml(it, channels, channelIds) }
+                    else parseFromXml(stream, channels, channelIds)
+                }
+                return CachedEpg(index, epg.value)
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                log.w("第 ${index + 1} 个节目单地址无有效内容", ex)
+                failure = ex
+            }
         }
+        throw failure ?: IOException("没有设置节目单地址")
+    }
+
+    @Serializable
+    private data class CachedEpg(val sourceIndex: Int, val programmes: List<Epg>)
+
+    private companion object {
+        val httpClient = OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build()
     }
 }

@@ -3,6 +3,8 @@ package top.yogiczy.mytv.ui.screens.leanback.video.player
 import android.content.Context
 import android.util.Log
 import android.view.SurfaceView
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -12,21 +14,11 @@ import kotlinx.coroutines.CoroutineScope
 class LeanbackCompositeVideoPlayer(
     context: Context,
     coroutineScope: CoroutineScope,
-    minBufferMs: Int = 60_000,
-    maxBufferMs: Int = 120_000,
-    bufferForPlaybackMs: Int = 2_000,
-    bufferForPlaybackAfterRebufferMs: Int = 3_000,
-    initialPlayWhenReady: Boolean = true,
 ) : LeanbackVideoPlayer(coroutineScope) {
 
     private val media3Player = LeanbackMedia3VideoPlayer(
         context = context,
         coroutineScope = coroutineScope,
-        minBufferMs = minBufferMs,
-        maxBufferMs = maxBufferMs,
-        bufferForPlaybackMs = bufferForPlaybackMs,
-        bufferForPlaybackAfterRebufferMs = bufferForPlaybackAfterRebufferMs,
-        initialPlayWhenReady = initialPlayWhenReady,
     )
 
     override fun initialize() {
@@ -46,12 +38,21 @@ class LeanbackCompositeVideoPlayer(
             triggerMetadata(meta)
         }
         player.onCutoff { triggerCutoff() }
+        player.onEnded { triggerEnded() }
+        player.onFirstFrame { triggerFirstFrame(it) }
     }
 
+    @OptIn(UnstableApi::class)
     override fun prepare(url: String) {
-        Log.d("CompositePlayer", "prepare Media3 $url")
         media3Player.prepare(url)
     }
+
+    override fun preloadLive(url: String) = media3Player.preloadLive(url)
+
+    override fun cancelLivePreload() = media3Player.cancelLivePreload()
+
+    override fun prepareLive(url: String, allowPreload: Boolean): Boolean =
+        media3Player.prepareLive(url, allowPreload)
 
     override fun play() {
         media3Player.play()
@@ -61,8 +62,8 @@ class LeanbackCompositeVideoPlayer(
         media3Player.pause()
     }
 
-    override fun setVolume(volume: Float) {
-        media3Player.setVolume(volume)
+    override fun stop() {
+        media3Player.stop()
     }
 
     override fun seekTo(positionMs: Long) {
@@ -71,6 +72,18 @@ class LeanbackCompositeVideoPlayer(
 
     override val currentPositionMs: Long
         get() = media3Player.currentPositionMs
+
+    override val bufferedDurationMs: Long
+        get() = media3Player.bufferedDurationMs
+
+    override val isPlaying: Boolean
+        get() = media3Player.isPlaying
+
+    override val hasLivePreload: Boolean
+        get() = media3Player.hasLivePreload
+
+    override val hasVideoTrack: Boolean
+        get() = media3Player.hasVideoTrack
 
     override fun setVideoSurfaceView(surfaceView: SurfaceView) {
         Log.d("CompositePlayer", "setVideoSurfaceView")

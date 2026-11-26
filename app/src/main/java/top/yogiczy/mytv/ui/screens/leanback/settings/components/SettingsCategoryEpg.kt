@@ -66,6 +66,7 @@ fun LeanbackSettingsCategoryEpg(
                 },
                 onSelected = {
                     settingsViewModel.epgEnable = !settingsViewModel.epgEnable
+                    LiveSettingsBus.requestEpgRefresh()
                 },
             )
         }
@@ -87,22 +88,32 @@ fun LeanbackSettingsCategoryEpg(
             var showDialog by remember { mutableStateOf(false) }
 
             LeanbackSettingsCategoryListItem(
-                headlineContent = "节目单刷新时间阈值",
-                supportingContent = "（当前版本始终刷新节目单，此项仅为兼容保留）",
-                trailingContent = "${settingsViewModel.epgRefreshTimeThreshold}小时",
+                headlineContent = "节目单刷新间隔",
+                supportingContent = "启动或切换直播源时，超出间隔才重新下载",
+                trailingContent = if (settingsViewModel.epgRefreshTimeThreshold == 0) {
+                    "自动（30 分钟）"
+                } else {
+                    "${settingsViewModel.epgRefreshTimeThreshold} 小时"
+                },
                 onSelected = { showDialog = true },
                 onLongSelected = {
                     settingsViewModel.epgRefreshTimeThreshold = 0
+                    LiveSettingsBus.requestEpgRefresh()
                 },
             )
 
             LeanbackSettingsValueSelectDialog(
                 showDialogProvider = { showDialog },
                 onDismissRequest = { showDialog = false },
-                title = "节目单刷新时间阈值",
-                options = listOf(0, 2, 4, 6, 8, 12, 24).map { "${it}小时" to it },
+                title = "节目单刷新间隔",
+                options = listOf(0, 2, 4, 6, 8, 12, 24).map {
+                    (if (it == 0) "自动（30 分钟）" else "$it 小时") to it
+                },
                 currentValueProvider = { settingsViewModel.epgRefreshTimeThreshold },
-                onSelected = { settingsViewModel.epgRefreshTimeThreshold = it },
+                onSelected = {
+                    settingsViewModel.epgRefreshTimeThreshold = it
+                    LiveSettingsBus.requestEpgRefresh()
+                },
             )
         }
 
@@ -131,9 +142,7 @@ fun LeanbackSettingsCategoryEpg(
                     showDialog = false
                     if (settingsViewModel.epgXmlUrl != it) {
                         settingsViewModel.epgXmlUrl = it
-                        coroutineScope.launch { EpgRepository().clearAllCache() }
-                        // 与网页推送路径对齐：立即刷新节目单
-                        LiveSettingsBus.epgRefreshRequests.tryEmit(Unit)
+                        LiveSettingsBus.requestEpgRefresh()
                         LeanbackToastState.I.showToast("节目单地址已切换，正在刷新...")
                     }
                 },
@@ -145,11 +154,13 @@ fun LeanbackSettingsCategoryEpg(
 
         item {
             LeanbackSettingsCategoryListItem(
-                headlineContent = "清除缓存",
-                supportingContent = "短按清除节目单缓存文件",
+                headlineContent = "刷新节目单",
+                supportingContent = "清除当前缓存并重新下载节目单",
                 onSelected = {
-                    coroutineScope.launch { EpgRepository().clearAllCache() }
-                    LeanbackToastState.I.showToast("清除缓存成功")
+                    coroutineScope.launch {
+                        EpgRepository().clearAllCache()
+                        LiveSettingsBus.requestEpgRefresh(forceRefresh = true)
+                    }
                 },
             )
         }

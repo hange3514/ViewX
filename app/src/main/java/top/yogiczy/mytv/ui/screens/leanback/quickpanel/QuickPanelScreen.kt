@@ -5,10 +5,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
@@ -39,14 +39,15 @@ import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelIptvIn
 import top.yogiczy.mytv.ui.screens.leanback.panel.components.LeanbackPanelPlayerInfo
 import top.yogiczy.mytv.ui.screens.leanback.panel.rememberPanelAutoCloseState
 import top.yogiczy.mytv.ui.screens.leanback.quickpanel.components.LeanbackQuickPanelIptvChannelsDialog
+import top.yogiczy.mytv.ui.screens.leanback.settings.components.LeanbackSettingsConfirmDialog
 import top.yogiczy.mytv.ui.screens.leanback.video.player.LeanbackVideoPlayer
 import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackDimens
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
-import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.handleLeanbackUserAction
+import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LeanbackQuickPanelScreen(
     modifier: Modifier = Modifier,
@@ -70,6 +71,8 @@ fun LeanbackQuickPanelScreen(
 ) {
     val childPadding = rememberLeanbackChildPadding()
     val focusRequester = remember { FocusRequester() }
+    var showChannelsDialog by remember { mutableStateOf(false) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -88,58 +91,81 @@ fun LeanbackQuickPanelScreen(
             channelNoProvider = currentIptvChannelNoProvider
         )
 
-        Box(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .fillMaxWidth()
                 .padding(
                     start = childPadding.start,
+                    end = childPadding.end,
                     bottom = childPadding.bottom,
-                    top = 20.dp,
-                ),
+                )
+                .widthIn(max = 680.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), MaterialTheme.shapes.large)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+            LeanbackPanelIptvInfo(
+                iptvProvider = currentIptvProvider,
+                iptvUrlIdxProvider = currentIptvUrlIdxProvider,
+                epgProvider = epgProvider,
+                isReplayModeProvider = isReplayModeProvider,
+                replayProgrammeProvider = replayProgrammeProvider,
+            )
+
+            LeanbackPanelPlayerInfo(metadataProvider = videoPlayerMetadataProvider)
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                LeanbackPanelIptvInfo(
-                    iptvProvider = currentIptvProvider,
-                    iptvUrlIdxProvider = currentIptvUrlIdxProvider,
-                    epgProvider = epgProvider,
-                    isReplayModeProvider = isReplayModeProvider,
-                    replayProgrammeProvider = replayProgrammeProvider,
-                )
-
-                LeanbackPanelPlayerInfo(
-                    metadataProvider = videoPlayerMetadataProvider,
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(LeanbackDimens.ListItemSpacing),
-                ) {
-                    LeanbackQuickPanelActionMultipleChannels(
-                        currentIptvProvider = currentIptvProvider,
-                        currentIptvUrlIdxProvider = currentIptvUrlIdxProvider,
-                        onIptvUrlIdxChange = onIptvUrlIdxChange,
-                        onUserAction = { autoCloseState.active() },
-                    )
-
+                val lineCount = currentIptvProvider().urlList.size
+                if (lineCount > 1) {
                     LeanbackQuickPanelButton(
-                        titleProvider = { "清除缓存" },
-                        onSelect = onClearCache,
-                    )
-
-                    LeanbackQuickPanelActionVideoAspectRatio(
-                        videoPlayerAspectRatioProvider = videoPlayerAspectRatioProvider,
-                        onChangeVideoPlayerAspectRatio = onChangeVideoPlayerAspectRatio,
-                    )
-
-                    LeanbackQuickPanelButton(
-                        titleProvider = { "更多设置" },
-                        onSelect = onMoreSettings,
+                        titleProvider = { "线路 ${currentIptvUrlIdxProvider() + 1}/$lineCount" },
+                        onSelect = {
+                            autoCloseState.setPaused(true)
+                            showChannelsDialog = true
+                        },
                     )
                 }
+                LeanbackQuickPanelActionVideoAspectRatio(
+                    videoPlayerAspectRatioProvider = videoPlayerAspectRatioProvider,
+                    onChangeVideoPlayerAspectRatio = onChangeVideoPlayerAspectRatio,
+                )
+                LeanbackQuickPanelButton(
+                    titleProvider = { "更多设置" },
+                    onSelect = onMoreSettings,
+                )
+                LeanbackQuickPanelButton(
+                    titleProvider = { "清除缓存" },
+                    onSelect = {
+                        autoCloseState.setPaused(true)
+                        showClearCacheDialog = true
+                    },
+                )
             }
         }
+
+        LeanbackQuickPanelIptvChannelsDialog(
+            showDialogProvider = { showChannelsDialog },
+            onDismissRequest = {
+                showChannelsDialog = false
+                autoCloseState.setPaused(false)
+            },
+            iptvProvider = currentIptvProvider,
+            iptvUrlIdxProvider = currentIptvUrlIdxProvider,
+            onIptvUrlIdxChange = onIptvUrlIdxChange,
+        )
+        LeanbackSettingsConfirmDialog(
+            showDialogProvider = { showClearCacheDialog },
+            onDismissRequest = {
+                showClearCacheDialog = false
+                autoCloseState.setPaused(false)
+            },
+            title = "清除播放缓存",
+            text = "清除直播源和节目单缓存后会重新加载，播放会短暂中断。",
+            onConfirm = onClearCache,
+        )
     }
 }
 
@@ -149,46 +175,14 @@ private fun LeanbackQuickPanelButton(
     titleProvider: () -> String,
     onSelect: () -> Unit = {},
 ) {
-    val focusRequester = remember { FocusRequester() }
-    var isFocused by remember { mutableStateOf(false) }
-
     androidx.tv.material3.Button(
         onClick = { onSelect() },
         shape = ButtonDefaults.shape(
             shape = MaterialTheme.shapes.small,
         ),
-        modifier = modifier
-            .focusRequester(focusRequester)
-            .onFocusChanged {
-                isFocused = it.isFocused || it.hasFocus
-            }
-            .tvTouchClickable(onClick = { onSelect() }),
+        modifier = modifier.tvTouchClickable(onClick = onSelect),
     ) {
         androidx.tv.material3.Text(text = titleProvider())
-    }
-}
-
-@Composable
-private fun LeanbackQuickPanelActionMultipleChannels(
-    currentIptvProvider: () -> Iptv = { Iptv() },
-    currentIptvUrlIdxProvider: () -> Int = { 0 },
-    onIptvUrlIdxChange: (Int) -> Unit = {},
-    onUserAction: () -> Unit = {},
-) {
-    if (currentIptvProvider().urlList.size > 1) {
-        var showChannelsDialog by remember { mutableStateOf(false) }
-        LeanbackQuickPanelButton(
-            titleProvider = { "多线路" },
-            onSelect = { showChannelsDialog = true },
-        )
-        LeanbackQuickPanelIptvChannelsDialog(
-            showDialogProvider = { showChannelsDialog },
-            onDismissRequest = { showChannelsDialog = false },
-            iptvProvider = currentIptvProvider,
-            iptvUrlIdxProvider = currentIptvUrlIdxProvider,
-            onIptvUrlIdxChange = onIptvUrlIdxChange,
-            onUserAction = onUserAction,
-        )
     }
 }
 

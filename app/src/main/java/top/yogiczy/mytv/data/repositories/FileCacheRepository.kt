@@ -1,11 +1,14 @@
 package top.yogiczy.mytv.data.repositories
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.yogiczy.mytv.AppGlobal
 import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 
 /**
  * 用于将数据缓存至本地
@@ -21,55 +24,70 @@ abstract class FileCacheRepository(
 
     private suspend fun getCacheData(): String? = withContext(Dispatchers.IO) {
         val file = getCacheFile()
-        if (file.exists()) file.readText()
-        else null
+        try {
+            if (file.exists()) file.readText() else null
+        } catch (ex: IOException) {
+            ex.printStackTrace()
+            null
+        }
     }
 
     private suspend fun setCacheData(data: String) = withContext(Dispatchers.IO) {
         // 先写临时文件再原子替换，避免进程被杀/并发写留下半截缓存导致下次解析崩溃
         val file = getCacheFile()
         val tmpFile = File(file.parentFile, "$fileName.tmp")
-        tmpFile.writeText(data)
-        if (!tmpFile.renameTo(file)) {
-            // 个别文件系统 renameTo 失败时回退直接写
-            file.writeText(data)
+        try {
+            tmpFile.writeText(data)
+            if (!tmpFile.renameTo(file)) throw IOException("无法替换缓存文件")
+        } finally {
             tmpFile.delete()
         }
     }
 
-    protected suspend fun getOrRefresh(cacheTime: Long, refreshOp: suspend () -> String): String {
-        return getOrRefresh(
-            { lastModified, _ -> System.currentTimeMillis() - lastModified >= cacheTime },
-            refreshOp,
-        )
-    }
-
-    fun clearCache() {
-        try {
-            getCacheFile().delete()
-        } catch (ex: Exception) {
-            ex.printStackTrace()
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            try {
+                getCacheFile().delete()
+            } catch (ex: SecurityException) {
+                ex.printStackTrace()
+            }
         }
     }
 
     protected suspend fun getOrRefresh(
-        isExpired: (lastModified: Long, cacheData: String?) -> Boolean,
+        cacheTime: Long,
+        cacheKey: String,
         refreshOp: suspend () -> String,
     ): String = mutex.withLock {
-        val cacheData = getCacheData()
+        // 缓存内容与来源一起写入。旧格式没有来源，无法用于当前请求的回退。
+        val digest = MessageDigest.getInstance("SHA-256").digest(cacheKey.toByteArray())
+        val header = digest.joinToString("", prefix = "ViewX-cache-v1: ", postfix = "\n") {
+            (it.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        val cacheData = getCacheData()?.takeIf { it.startsWith(header) }
+            ?.substring(header.length)?.takeIf { it.isNotBlank() }
 
-        if (!isExpired(getCacheFile().lastModified(), cacheData) && !cacheData.isNullOrBlank()) {
+        val age = System.currentTimeMillis() - getCacheFile().lastModified()
+        if (cacheData != null && age in 0 until cacheTime) {
             return@withLock cacheData
         }
 
-        try {
-            val data = refreshOp()
-            setCacheData(data)
-            data
+        val freshData = try {
+            refreshOp()
+        } catch (ex: CancellationException) {
+            throw ex
         } catch (ex: Exception) {
-            // 刷新失败时回退到陈旧缓存（stale-if-error），网络抖动不至于把数据清空
-            if (!cacheData.isNullOrBlank()) cacheData else throw ex
+            // 刷新失败时仍可读同源旧缓存。
+            return@withLock cacheData ?: throw ex
         }
+
+        try {
+            setCacheData(header + freshData)
+        } catch (ex: IOException) {
+            // 磁盘故障不影响本次已成功加载的数据。
+            ex.printStackTrace()
+        }
+        freshData
     }
 }
 

@@ -1,7 +1,9 @@
 package top.yogiczy.mytv.ui.screens.leanback.classicpanel.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusDirection
@@ -38,6 +41,7 @@ import androidx.tv.foundation.ExperimentalTvFoundationApi
 import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.tv.foundation.lazy.list.TvLazyListState
 import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
@@ -45,6 +49,7 @@ import top.yogiczy.mytv.data.entities.EpgProgramme
 import top.yogiczy.mytv.data.entities.EpgProgrammeList
 import top.yogiczy.mytv.data.entities.indexOfCurrent
 import top.yogiczy.mytv.data.entities.Iptv
+import top.yogiczy.mytv.ui.screens.leanback.components.LeanbackEmptyListItem
 import top.yogiczy.mytv.ui.theme.LeanbackAlpha
 import top.yogiczy.mytv.ui.theme.LeanbackDimens
 import top.yogiczy.mytv.ui.theme.LeanbackFocusedContainerColor
@@ -52,7 +57,6 @@ import top.yogiczy.mytv.ui.theme.LeanbackFocusedContentColor
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
 import top.yogiczy.mytv.ui.screens.leanback.toast.LeanbackToastState
 import top.yogiczy.mytv.ui.utils.CurrentTime
-import top.yogiczy.mytv.ui.utils.handleLeanbackKeyEvents
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsLive
 import top.yogiczy.mytv.ui.utils.rememberProgrammeIsReplayable
@@ -67,18 +71,35 @@ fun LeanbackClassicPanelEpgList(
     iptvProvider: () -> Iptv = { Iptv() },
     epgProvider: () -> Epg? = { Epg() },
     exitFocusRequesterProvider: () -> FocusRequester = { FocusRequester.Default },
+    onReturnToChannels: () -> Unit = {},
     onPlayCatchup: (Iptv, EpgProgramme) -> Unit = { _, _ -> },
     onUserAction: () -> Unit = {},
 ) {
     val dateFormat = remember { SimpleDateFormat("E MM-dd", Locale.getDefault()) }
     val epg = epgProvider()
+    val exitToChannels = Modifier.focusProperties {
+        exit = { direction ->
+            if (direction == FocusDirection.Left) {
+                onReturnToChannels()
+                exitFocusRequesterProvider()
+            } else {
+                FocusRequester.Default
+            }
+        }
+    }
 
     if (epg == null || epg.programmes.isEmpty()) {
-        // 空节目单也显示提示（此前整块不渲染，用户无法区分"没加载"还是"没节目"）
-        top.yogiczy.mytv.ui.screens.leanback.components.LeanbackEmptyListItem(
-            text = "当前频道暂无节目",
-            modifier = modifier,
-        )
+        Box(
+            modifier = modifier
+                .fillMaxHeight()
+                .width(220.dp)
+                .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurfaceShallow))
+                .then(exitToChannels)
+                .focusable(),
+            contentAlignment = Alignment.Center,
+        ) {
+            LeanbackEmptyListItem(text = "当前频道暂无节目")
+        }
         return
     }
 
@@ -86,7 +107,10 @@ fun LeanbackClassicPanelEpgList(
         val programmesGroup = remember(epg) {
             epg.programmes.groupBy { dateFormat.format(it.startAt) }
         }
-        var currentDay by remember(programmesGroup) { mutableStateOf(dateFormat.format(System.currentTimeMillis())) }
+        var currentDay by remember(programmesGroup) {
+            val today = dateFormat.format(System.currentTimeMillis())
+            mutableStateOf(today.takeIf { it in programmesGroup } ?: programmesGroup.keys.last())
+        }
         val programmes = remember(currentDay, programmesGroup) {
             programmesGroup.getOrElse(currentDay) { emptyList() }
         }
@@ -118,14 +142,9 @@ fun LeanbackClassicPanelEpgList(
                     .fillMaxHeight()
                     .width(240.dp)
                     .background(MaterialTheme.colorScheme.background.copy(LeanbackAlpha.PanelSurfaceShallow))
-                    .focusProperties {
-                        exit = {
-                            if (it == FocusDirection.Left) exitFocusRequesterProvider()
-                            else FocusRequester.Default
-                        }
-                    },
+                    .then(exitToChannels),
             ) {
-                items(programmes, key = { it.startAt }) { programme ->
+                itemsIndexed(programmes, key = { index, programme -> "$index:${programme.startAt}" }) { _, programme ->
                     LeanbackClassicPanelEpgItem(
                         iptvProvider = iptvProvider,
                         epgProgrammeProvider = { programme },

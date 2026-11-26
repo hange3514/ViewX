@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import top.yogiczy.mytv.data.entities.Epg
@@ -37,9 +38,11 @@ fun LeanbackPanelIptvInfo(
     epgProvider: () -> Epg? = { null },
     isReplayModeProvider: () -> Boolean = { false },
     replayProgrammeProvider: () -> EpgProgramme? = { null },
+    isSwitchingChannel: Boolean = false,
 ) {
     val iptv = iptvProvider()
     val iptvUrlIdx = iptvUrlIdxProvider()
+    val url = iptv.urlList.getOrNull(iptvUrlIdx)
     val (currentProgramme, nextProgramme) = rememberCurrentProgrammes(
         epgProvider()?.programmes ?: emptyList()
     )
@@ -52,8 +55,9 @@ fun LeanbackPanelIptvInfo(
             Text(
                 text = iptv.name,
                 style = MaterialTheme.typography.headlineLarge,
-                modifier = Modifier.alignByBaseline(),
+                modifier = Modifier.weight(1f, fill = false).alignByBaseline(),
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
 
             Spacer(modifier = Modifier.width(6.dp))
@@ -83,10 +87,12 @@ fun LeanbackPanelIptvInfo(
                     }
 
                     // ipv4、iptv6标识
-                    Text(
-                        text = if (iptv.urlList[iptvUrlIdx].isIPv6()) "IPV6" else "IPV4",
-                        modifier = textModifier,
-                    )
+                    if (url != null) {
+                        Text(
+                            text = if (url.isIPv6()) "IPv6" else "IPv4",
+                            modifier = textModifier,
+                        )
+                    }
                 }
             }
         }
@@ -95,24 +101,26 @@ fun LeanbackPanelIptvInfo(
             LocalTextStyle provides MaterialTheme.typography.bodyLarge,
             LocalContentColor provides LocalContentColor.current.copy(alpha = 0.8f),
         ) {
-            if (isReplayMode && replayProgramme != null) {
+            if (isSwitchingChannel) {
+                Text(text = "正在切换频道…", color = MaterialTheme.colorScheme.primary)
+            } else if (isReplayMode && replayProgramme != null) {
                 Text(
                     text = "回放中：${replayProgramme.title}",
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "${timeFormat.format(replayProgramme.startAt)} ~ ${timeFormat.format(replayProgramme.endAt)}",
                     maxLines = 1,
                 )
             } else {
-                Text(
-                    text = "正在播放：${currentProgramme?.title ?: "无节目"}",
-                    maxLines = 1,
-                )
-                Text(
-                    text = "稍后播放：${nextProgramme?.title ?: "无节目"}",
-                    maxLines = 1,
-                )
+                currentProgramme?.let {
+                    Text(text = "正在播放：${it.title}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                nextProgramme?.let {
+                    Text(text = "稍后播放：${it.title}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (currentProgramme == null && nextProgramme == null) Text("暂无节目单")
             }
         }
     }

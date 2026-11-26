@@ -5,26 +5,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.debounce
 
 @Stable
 class PanelAutoCloseState internal constructor(
     @IntRange(from = 0) private val timeout: Long,
     private val onTimeout: () -> Unit = {},
 ) {
+    private var paused = false
+    private val channel = Channel<Boolean>(Channel.CONFLATED)
+
     fun active() {
-        channel.trySend(timeout)
+        if (!paused) channel.trySend(true)
     }
 
-    private val channel = Channel<Long>(Channel.CONFLATED)
+    fun setPaused(value: Boolean) {
+        paused = value
+        channel.trySend(!paused)
+    }
 
-    @OptIn(FlowPreview::class)
     suspend fun observe() {
-        channel.consumeAsFlow().debounce { it }.collect {
-            onTimeout()
+        channel.consumeAsFlow().collectLatest { active ->
+            if (active) {
+                delay(timeout)
+                onTimeout()
+            }
         }
     }
 }

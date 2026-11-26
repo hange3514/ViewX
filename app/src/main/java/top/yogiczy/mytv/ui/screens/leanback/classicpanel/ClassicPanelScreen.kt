@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -17,14 +16,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
@@ -44,7 +44,6 @@ import top.yogiczy.mytv.ui.rememberLeanbackChildPadding
 import top.yogiczy.mytv.ui.screens.leanback.classicpanel.components.LeanbackClassicPanelEpgList
 import top.yogiczy.mytv.ui.screens.leanback.classicpanel.components.LeanbackClassicPanelIptvGroupList
 import top.yogiczy.mytv.ui.screens.leanback.classicpanel.components.LeanbackClassicPanelIptvList
-import top.yogiczy.mytv.ui.screens.leanback.components.LeanbackVisible
 import top.yogiczy.mytv.ui.screens.leanback.panel.PanelAutoCloseState
 import top.yogiczy.mytv.ui.screens.leanback.panel.rememberPanelAutoCloseState
 import top.yogiczy.mytv.ui.theme.LeanbackTheme
@@ -77,7 +76,10 @@ fun LeanbackClassicPanelScreen(
     }
 
     LeanbackClassicPanelScreenWrapper(
-        modifier = modifier,
+        modifier = modifier.onPreviewKeyEvent {
+            autoCloseState.active()
+            false
+        },
         onClose = onClose,
     ) {
         LeanbackClassicPanelScreenContent(
@@ -115,9 +117,9 @@ private fun LeanbackClassicPanelScreenWrapper(
             modifier = Modifier
                 .pointerInput(Unit) { detectTapGestures(onTap = { }) }
                 .padding(
-                    top = childPadding.top,
+                    top = childPadding.top + 8.dp,
                     start = childPadding.start,
-                    bottom = childPadding.bottom,
+                    bottom = childPadding.bottom + 8.dp,
                     end = childPadding.end,
                 )
                 .clip(MaterialTheme.shapes.small),
@@ -127,7 +129,6 @@ private fun LeanbackClassicPanelScreenWrapper(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LeanbackClassicPanelScreenContent(
     modifier: Modifier = Modifier,
@@ -148,6 +149,7 @@ private fun LeanbackClassicPanelScreenContent(
     val iptvGroupList = iptvGroupListProvider()
     val iptvFavoriteList = iptvFavoriteListProvider()
     val iptvFavoriteEnable = iptvFavoriteEnableProvider()
+    val focusManager = LocalFocusManager.current
 
     val favoriteIptvList = remember(iptvGroupList, iptvFavoriteList) {
         val favoriteSet = iptvFavoriteList.toHashSet()
@@ -163,10 +165,11 @@ private fun LeanbackClassicPanelScreenContent(
 
     var focusedIptvGroup by remember {
         mutableStateOf(
-            if (iptvFavoriteListVisibleProvider())
+            if (iptvFavoriteEnable && iptvFavoriteListVisibleProvider())
                 LeanbackClassicPanelScreenFavoriteIptvGroup
             else
-                displayGroupList[max(0, displayGroupList.iptvGroupIdx(currentIptvProvider()))]
+                displayGroupList.getOrNull(max(0, displayGroupList.iptvGroupIdx(currentIptvProvider())))
+                    ?: IptvGroup()
         )
     }
 
@@ -174,11 +177,17 @@ private fun LeanbackClassicPanelScreenContent(
     var focusedIptvFocusRequester by remember { mutableStateOf(FocusRequester.Default) }
 
     var epgListVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(epgListVisible) {
+        if (epgListVisible) {
+            withFrameNanos { }
+            focusManager.moveFocus(FocusDirection.Right)
+        }
+    }
 
     val displayGroupListProvider = remember(displayGroupList) { { displayGroupList } }
     val initialIptvGroupProvider = remember {
         {
-            if (iptvFavoriteListVisibleProvider())
+            if (iptvFavoriteEnable && iptvFavoriteListVisibleProvider())
                 LeanbackClassicPanelScreenFavoriteIptvGroup
             else
                 iptvGroupList.find { it.iptvList.contains(currentIptvProvider()) }
@@ -195,124 +204,97 @@ private fun LeanbackClassicPanelScreenContent(
         { focusedIptvFocusRequester }
     }
 
-    Row(modifier = modifier) {
-        LeanbackClassicPanelIptvGroupList(
-            iptvGroupListProvider = displayGroupListProvider,
-            initialIptvGroupProvider = initialIptvGroupProvider,
-            onIptvGroupFocused = onIptvGroupFocused,
-            exitFocusRequesterProvider = exitFocusRequesterProvider,
-            onUserAction = onUserAction,
-        )
-
-        val iptvGroupProvider = remember(focusedIptvGroup) { { focusedIptvGroup } }
-        val iptvListProvider = remember(focusedIptvGroup, favoriteIptvList) {
-            {
-                if (focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup)
-                    IptvList(favoriteIptvList)
-                else
-                    focusedIptvGroup.iptvList
-            }
-        }
-        val onIptvFocused = remember {
-            { iptv: Iptv, focusRequester: FocusRequester ->
-                focusedIptv = iptv
-                focusedIptvFocusRequester = focusRequester
-                // 光标停留时通知上层去抖预缓冲
-                onIptvFocusedPreview(iptv)
-            }
-        }
-        val isFavoriteListProvider = remember(focusedIptvGroup) {
-            { focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup }
-        }
-
-        LeanbackClassicPanelIptvList(
-            modifier = Modifier
-                .handleLeanbackKeyEvents(
-                    onRight = { epgListVisible = true },
-                    onLeft = { epgListVisible = false }
-                )
-                .focusProperties {
-                    exit = {
-                        if (epgListVisible && it == FocusDirection.Left) {
-                            epgListVisible = false
-                            FocusRequester.Cancel
-                        } else {
-                            FocusRequester.Default
-                        }
-                    }
-                },
-            iptvGroupProvider = iptvGroupProvider,
-            iptvListProvider = iptvListProvider,
-            epgListProvider = epgListProvider,
-            initialIptvProvider = currentIptvProvider,
-            onIptvSelected = onIptvSelected,
-            onIptvFavoriteToggle = onIptvFavoriteToggle,
-            onIptvFocused = onIptvFocused,
-            showProgrammeProgressProvider = showProgrammeProgressProvider,
-            onUserAction = onUserAction,
-            isFavoriteListProvider = isFavoriteListProvider,
-        )
-
-        val epgListVisibleProvider = remember { { epgListVisible } }
-        val epgListInvisibleProvider = remember { { !epgListVisible } }
-        val focusedIptvProvider = remember(focusedIptv) { { focusedIptv } }
-        // 注意：epgListProvider 必须作为 remember 的 key。
-        // EPG 是异步加载的（Ready 状态先携带空 epgList，加载完成后再 copy 更新），
-        // 若不指定 key，这里会一直持有面板首次组合时的旧 provider（闭包内是空的 epgList），
-        // 导致 EPG 在面板打开期间加载完成后，按右键只隐藏提示条却显示不出节目单
-        val focusedIptvEpgProvider = remember(epgListProvider, focusedIptv) {
-            { epgListProvider().findByIptv(focusedIptv) }
-        }
-        val focusedIptvFocusRequesterProvider =
-            remember(focusedIptvFocusRequester) { { focusedIptvFocusRequester } }
-
-        LeanbackVisible(epgListVisibleProvider) {
-            // 触摸设备无左方向键，提供返回频道列表的入口
-            LeanbackClassicPanelVerticalTip(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.background.copy(0.7f))
-                    .padding(horizontal = 4.dp),
-                text = "返回",
-                onTap = { epgListVisible = false },
-            )
-            LeanbackClassicPanelEpgList(
-                iptvProvider = focusedIptvProvider,
-                epgProvider = focusedIptvEpgProvider,
-                exitFocusRequesterProvider = focusedIptvFocusRequesterProvider,
-                onPlayCatchup = onPlayCatchup,
+    Column(modifier = modifier.background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))) {
+        Row(modifier = Modifier.weight(1f)) {
+            LeanbackClassicPanelIptvGroupList(
+                iptvGroupListProvider = displayGroupListProvider,
+                initialIptvGroupProvider = initialIptvGroupProvider,
+                onIptvGroupFocused = onIptvGroupFocused,
+                exitFocusRequesterProvider = exitFocusRequesterProvider,
                 onUserAction = onUserAction,
             )
-        }
-        LeanbackVisible(epgListInvisibleProvider) {
-            LeanbackClassicPanelVerticalTip(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.background.copy(0.7f))
-                    .padding(horizontal = 4.dp),
-                text = "向右查看节目单",
-                onTap = { epgListVisible = true },
-            )
-        }
-    }
-}
 
-@Composable
-private fun LeanbackClassicPanelVerticalTip(
-    modifier: Modifier = Modifier,
-    text: String,
-    onTap: () -> Unit = {},
-) {
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() })
-            },
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        text.map {
-            Text(text = it.toString(), style = MaterialTheme.typography.labelSmall)
+            val iptvGroupProvider = remember(focusedIptvGroup) { { focusedIptvGroup } }
+            val iptvListProvider = remember(focusedIptvGroup, favoriteIptvList) {
+                {
+                    if (focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup)
+                        IptvList(favoriteIptvList)
+                    else
+                        focusedIptvGroup.iptvList
+                }
+            }
+            val onIptvFocused = remember {
+                { iptv: Iptv, focusRequester: FocusRequester ->
+                    focusedIptv = iptv
+                    focusedIptvFocusRequester = focusRequester
+                    // 光标停留时通知上层去抖预缓冲
+                    onIptvFocusedPreview(iptv)
+                }
+            }
+            val isFavoriteListProvider = remember(focusedIptvGroup) {
+                { focusedIptvGroup == LeanbackClassicPanelScreenFavoriteIptvGroup }
+            }
+
+            LeanbackClassicPanelIptvList(
+                modifier = Modifier
+                    .handleLeanbackKeyEvents(
+                        onRight = { epgListVisible = true },
+                    ),
+                iptvGroupProvider = iptvGroupProvider,
+                iptvListProvider = iptvListProvider,
+                epgListProvider = epgListProvider,
+                initialIptvProvider = currentIptvProvider,
+                onIptvSelected = onIptvSelected,
+                onIptvFavoriteToggle = onIptvFavoriteToggle,
+                onIptvFocused = onIptvFocused,
+                showProgrammeProgressProvider = showProgrammeProgressProvider,
+                onUserAction = onUserAction,
+                isFavoriteListProvider = isFavoriteListProvider,
+            )
+
+            val focusedIptvProvider = remember(focusedIptv) { { focusedIptv } }
+            // 注意：epgListProvider 必须作为 remember 的 key。
+            // EPG 是异步加载的（Ready 状态先携带空 epgList，加载完成后再 copy 更新），
+            // 若不指定 key，这里会一直持有面板首次组合时的旧 provider（闭包内是空的 epgList），
+            // 导致 EPG 在面板打开期间加载完成后，按右键只隐藏提示条却显示不出节目单
+            val focusedIptvEpgProvider = remember(epgListProvider, focusedIptv) {
+                { epgListProvider().findByIptv(focusedIptv) }
+            }
+            val focusedIptvFocusRequesterProvider =
+                remember(focusedIptvFocusRequester) { { focusedIptvFocusRequester } }
+
+            if (epgListVisible) {
+                LeanbackClassicPanelEpgList(
+                    iptvProvider = focusedIptvProvider,
+                    epgProvider = focusedIptvEpgProvider,
+                    exitFocusRequesterProvider = focusedIptvFocusRequesterProvider,
+                    onReturnToChannels = { epgListVisible = false },
+                    onPlayCatchup = onPlayCatchup,
+                    onUserAction = onUserAction,
+                )
+            }
         }
+        Text(
+            text = if (epgListVisible) "← 频道" else "节目单 →",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        onUserAction()
+                        if (epgListVisible) {
+                            epgListVisible = false
+                            if (focusedIptvFocusRequester != FocusRequester.Default) {
+                                focusedIptvFocusRequester.requestFocus()
+                            }
+                        } else {
+                            epgListVisible = true
+                        }
+                    })
+                },
+        )
     }
 }
 

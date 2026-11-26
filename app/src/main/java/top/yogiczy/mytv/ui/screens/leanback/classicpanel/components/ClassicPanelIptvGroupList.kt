@@ -30,7 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.foundation.lazy.list.TvLazyColumn
-import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.ListItemDefaults
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -89,10 +89,10 @@ fun LeanbackClassicPanelIptvGroupList(
                 }
             },
     ) {
-        items(
+        itemsIndexed(
             items = iptvGroupList,
-            key = { it.name },
-        ) { iptvGroup ->
+            key = { index, group -> "$index:${group.name}" },
+        ) { _, iptvGroup ->
             val isSelected by remember { derivedStateOf { iptvGroup == focusedIptvGroup } }
 
             LeanbackClassicPanelIptvGroupItem(

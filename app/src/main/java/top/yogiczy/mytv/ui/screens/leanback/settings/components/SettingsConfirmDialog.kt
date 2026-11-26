@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.ui.screens.leanback.settings.components
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -8,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import top.yogiczy.mytv.ui.utils.tvTouchClickable
 
@@ -25,12 +27,12 @@ fun LeanbackSettingsConfirmDialog(
 ) {
     if (!showDialogProvider()) return
 
-    val confirmFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { confirmFocusRequester.requestFocus() }
+    val cancelFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { cancelFocusRequester.requestFocus() }
 
     AlertDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = modifier,
+        modifier = modifier.widthIn(max = 480.dp),
         onDismissRequest = onDismissRequest,
         confirmButton = {
             androidx.tv.material3.Button(
@@ -39,7 +41,6 @@ fun LeanbackSettingsConfirmDialog(
                     onDismissRequest()
                 },
                 modifier = Modifier
-                    .focusRequester(confirmFocusRequester)
                     .tvTouchClickable(onClick = {
                         onConfirm()
                         onDismissRequest()
@@ -51,7 +52,9 @@ fun LeanbackSettingsConfirmDialog(
         dismissButton = {
             androidx.tv.material3.Button(
                 onClick = onDismissRequest,
-                modifier = Modifier.tvTouchClickable(onClick = onDismissRequest),
+                modifier = Modifier
+                    .focusRequester(cancelFocusRequester)
+                    .tvTouchClickable(onClick = onDismissRequest),
             ) {
                 androidx.tv.material3.Text(text = "取消")
             }

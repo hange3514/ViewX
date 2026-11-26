@@ -3,7 +3,7 @@ package top.yogiczy.mytv.ui.screens.leanback.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,14 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -35,10 +32,6 @@ fun LeanbackSettingsScreen(
     onClose: () -> Unit = {},
 ) {
     val childPadding = rememberLeanbackChildPadding()
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
 
     var focusedCategory by remember {
         mutableStateOf(
@@ -48,21 +41,21 @@ fun LeanbackSettingsScreen(
         )
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .focusRequester(focusRequester)
             .background(MaterialTheme.colorScheme.surface)
             .padding(
-                top = childPadding.top + 20.dp,
+                top = childPadding.top + 8.dp,
                 bottom = childPadding.bottom,
                 start = childPadding.start,
                 end = childPadding.end,
             )
             .pointerInput(Unit) { detectTapGestures(onTap = { }) },
     ) {
+        val compact = maxWidth < 700.dp
         Row(
-            horizontalArrangement = Arrangement.spacedBy(40.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 18.dp else 28.dp),
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -76,7 +69,7 @@ fun LeanbackSettingsScreen(
                 }
 
                 LeanbackSettingsCategoryList(
-                    modifier = Modifier.width(200.dp),
+                    modifier = Modifier.width(if (compact) 168.dp else 200.dp),
                     focusedCategoryProvider = { focusedCategory },
                     onFocused = {
                         focusedCategory = it
@@ -86,6 +79,7 @@ fun LeanbackSettingsScreen(
             }
 
             LeanbackSettingsCategoryContent(
+                modifier = Modifier.weight(1f),
                 focusedCategoryProvider = { focusedCategory },
             )
         }

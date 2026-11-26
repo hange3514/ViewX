@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.foundation.lazy.list.TvLazyRow
-import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.data.entities.Epg
@@ -69,10 +69,10 @@ fun LeanbackPanelIptvList(
             end = childPadding.end,
         ),
     ) {
-        items(
+        itemsIndexed(
             items = iptvList,
-            key = { it.urlList.firstOrNull() ?: it.name },
-        ) { iptv ->
+            key = { index, iptv -> "$index:${iptv.name}" },
+        ) { _, iptv ->
             val onSelected = remember(iptv) { { onIptvSelected(iptv) } }
             val onFavoriteToggle = remember(iptv) { { onIptvFavoriteToggle(iptv) } }
             val onShowEpg = remember(iptv) {
@@ -110,11 +110,12 @@ fun LeanbackPanelIptvList(
         modifier = Modifier
             .handleLeanbackKeyEvents(
                 onLeft = {
-                    currentShowEpgIptv = iptvList[max(0, iptvList.indexOf(currentShowEpgIptv) - 1)]
+                    iptvList.getOrNull(max(0, iptvList.indexOf(currentShowEpgIptv) - 1))
+                        ?.let { currentShowEpgIptv = it }
                 },
                 onRight = {
-                    currentShowEpgIptv =
-                        iptvList[min(iptvList.size - 1, iptvList.indexOf(currentShowEpgIptv) + 1)]
+                    iptvList.getOrNull(min(iptvList.size - 1, iptvList.indexOf(currentShowEpgIptv) + 1))
+                        ?.let { currentShowEpgIptv = it }
                 },
             ),
         onUserAction = onUserAction,

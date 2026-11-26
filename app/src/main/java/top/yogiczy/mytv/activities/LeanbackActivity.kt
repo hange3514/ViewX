@@ -38,19 +38,13 @@ class LeanbackActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         setContent {
-            // 隐藏状态栏、导航栏
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowCompat.getInsetsController(window, window.decorView).let { insetsController ->
-                insetsController.hide(WindowInsetsCompat.Type.statusBars())
-                insetsController.hide(WindowInsetsCompat.Type.navigationBars())
-                insetsController.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-
-            // 屏幕常亮
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
             LeanbackTheme {
                 Box(
                     modifier = Modifier
